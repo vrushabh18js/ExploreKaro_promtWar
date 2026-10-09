@@ -21,7 +21,9 @@ export function Header({
   onToggleWishlistFilter,
   showWishlistOnly,
   theme,
-  onToggleTheme
+  onToggleTheme,
+  isMapOpen,
+  onToggleMap
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -299,6 +301,29 @@ export function Header({
 
         {/* Action Controls & Modal Launchers */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {/* Open / Close Map on User Demand */}
+          <button
+            onClick={onToggleMap}
+            title={isMapOpen ? "Close Interactive Map View" : "Open Interactive Map View"}
+            style={{
+              padding: '8px 14px',
+              fontSize: '13px',
+              fontWeight: 700,
+              borderRadius: 'var(--radius-md)',
+              border: isMapOpen ? '1px solid #ef4444' : '1px solid #10b981',
+              background: isMapOpen ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+              color: isMapOpen ? '#ef4444' : '#10b981',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              transition: 'all var(--transition-fast)'
+            }}
+          >
+            <MapPin size={15} />
+            <span>{isMapOpen ? '✕ Close Map' : '🗺️ Open Map'}</span>
+          </button>
+
           {/* Smart Route Planner */}
           <button
             className="btn-primary"

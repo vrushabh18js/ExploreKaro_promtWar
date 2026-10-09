@@ -11,7 +11,8 @@ export function MapViewer({
   onSelectPlace,
   onNavigateTo,
   onMapClick,
-  activeRoutePolyline
+  activeRoutePolyline,
+  onClose
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -22,7 +23,7 @@ export function MapViewer({
 
   const [showRadius, setShowRadius] = useState(true);
   const [showHazards, setShowHazards] = useState(true);
-  const [tileTheme, setTileTheme] = useState('voyager'); // 'voyager' | 'dark'
+  const [tileTheme, setTileTheme] = useState('osm'); // 'osm' | 'esri'
 
   // Initialize Leaflet Map
   useEffect(() => {
@@ -37,13 +38,13 @@ export function MapViewer({
 
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-      // Tile Layer (CartoDB Voyager: clean, elegant, modern)
-      const tileUrl = tileTheme === 'dark'
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-        : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+      // 100% Free OpenStreetMap & Esri Tiles (Zero API key required)
+      const tileUrl = tileTheme === 'esri'
+        ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
+        : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
       const tiles = L.tileLayer(tileUrl, {
-        attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; OpenStreetMap',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19
       });
       tiles.addTo(map);
@@ -54,6 +55,11 @@ export function MapViewer({
       markersLayerRef.current = L.layerGroup().addTo(map);
       hazardsLayerRef.current = L.layerGroup().addTo(map);
 
+      // Invalidate size to ensure no grey tiles when opened on demand
+      setTimeout(() => {
+        map.invalidateSize();
+      }, 150);
+
       // Map Click Handler
       map.on('click', (e) => {
         if (onMapClick) onMapClick(e.latlng);
@@ -61,7 +67,10 @@ export function MapViewer({
     }
 
     return () => {
-      // Keep map alive or cleanup if needed
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
     };
   }, []);
 
@@ -71,12 +80,12 @@ export function MapViewer({
     if (!map || !map._tileLayer) return;
 
     map.removeLayer(map._tileLayer);
-    const tileUrl = tileTheme === 'dark'
-      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+    const tileUrl = tileTheme === 'esri'
+      ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}'
+      : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
     const tiles = L.tileLayer(tileUrl, {
-      attribution: '&copy; CARTO &copy; OpenStreetMap',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19
     });
     tiles.addTo(map);
@@ -354,10 +363,34 @@ export function MapViewer({
           <span>Hazards</span>
         </button>
 
+        {/* Close Map Button (When Opened On Demand) */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            title="Close Interactive Map"
+            style={{
+              background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: 'var(--radius-md)',
+              padding: '9px 14px',
+              fontSize: '13px',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)'
+            }}
+          >
+            <span>✕ Close Map</span>
+          </button>
+        )}
+
         {/* Tile Theme Toggle */}
         <button
-          onClick={() => setTileTheme(tileTheme === 'voyager' ? 'dark' : 'voyager')}
-          title="Switch Map Tiles (Voyager / Dark)"
+          onClick={() => setTileTheme(tileTheme === 'osm' ? 'esri' : 'osm')}
+          title="Switch Map Tiles (OpenStreetMap / Esri World Street)"
           style={{
             background: 'var(--bg-secondary)',
             color: 'var(--text-main)',
@@ -374,7 +407,7 @@ export function MapViewer({
           }}
         >
           <Layers size={14} />
-          <span>{tileTheme === 'voyager' ? 'Voyager' : 'Dark Tiles'}</span>
+          <span>{tileTheme === 'osm' ? 'OSM Tiles' : 'Esri Street'}</span>
         </button>
 
         {/* Re-center */}

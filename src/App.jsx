@@ -50,6 +50,9 @@ export function App() {
   // Active Route drawn on map
   const [activeRoutePolyline, setActiveRoutePolyline] = useState(null);
 
+  // Map on-demand visibility (defaults to false per user requirement)
+  const [isMapOpen, setIsMapOpen] = useState(false);
+
   // Wishlist
   const [wishlist, setWishlist] = useState([]);
 
@@ -221,6 +224,7 @@ export function App() {
     setNavOriginPlace(origin);
     setNavDestPlace(destPlace);
     setIsNavModalOpen(true);
+    setIsMapOpen(true); // Open map when navigating
   };
 
   return (
@@ -237,6 +241,7 @@ export function App() {
           setNavOriginPlace(allCurrentPlaces[0] || null);
           setNavDestPlace(allCurrentPlaces[1] || allCurrentPlaces[0] || null);
           setIsNavModalOpen(true);
+          setIsMapOpen(true);
         }}
         onOpenComparison={() => setIsComparisonOpen(true)}
         onOpenDispatch={() => setIsDispatchOpen(true)}
@@ -246,6 +251,8 @@ export function App() {
         showWishlistOnly={showWishlistOnly}
         theme={theme}
         onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+        isMapOpen={isMapOpen}
+        onToggleMap={() => setIsMapOpen(!isMapOpen)}
       />
 
       {/* 2. Realtime Urban Chaos Barometer */}
@@ -268,63 +275,194 @@ export function App() {
         counts={categoryCounts}
       />
 
-      {/* 4. Main Two-Column Viewport (Map & Explorer Cards) */}
-      <main className="main-viewport-grid">
-        {/* Left: Interactive Leaflet Map */}
-        <section className="main-viewport-map-col" style={{ height: '100%', position: 'relative' }}>
-          <MapViewer
-            center={anchorCoords}
-            radiusKm={radiusKm}
-            places={filteredPlaces}
-            hazards={allHazards}
-            selectedPlace={selectedPlace}
-            onSelectPlace={setSelectedPlace}
-            onNavigateTo={handleNavigateTo}
-            activeRoutePolyline={activeRoutePolyline}
-            onMapClick={(latlng) => {
-              // Click anywhere to relocate exploration anchor
-              setAnchorCoords([latlng.lat, latlng.lng]);
-            }}
-          />
-        </section>
+      {/* 4. Main Viewport: On-Demand Map OR Full-Width Discovery Feed */}
+      {isMapOpen ? (
+        <main className="main-viewport-grid">
+          {/* Left: Interactive Leaflet Map (On-Demand) */}
+          <section className="main-viewport-map-col" style={{ height: '100%', position: 'relative' }}>
+            <MapViewer
+              center={anchorCoords}
+              radiusKm={radiusKm}
+              places={filteredPlaces}
+              hazards={allHazards}
+              selectedPlace={selectedPlace}
+              onSelectPlace={setSelectedPlace}
+              onNavigateTo={handleNavigateTo}
+              activeRoutePolyline={activeRoutePolyline}
+              onClose={() => setIsMapOpen(false)}
+              onMapClick={(latlng) => {
+                setAnchorCoords([latlng.lat, latlng.lng]);
+              }}
+            />
+          </section>
 
-        {/* Right: Scrollable Place Discovery Feed */}
-        <section className="main-viewport-feed-col" style={{
-          height: '100%',
-          overflowY: 'auto',
-          padding: '20px',
-          background: 'var(--bg-primary)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px'
+          {/* Right: Scrollable Place Discovery Feed in Map Split Mode */}
+          <section className="main-viewport-feed-col" style={{
+            height: '100%',
+            overflowY: 'auto',
+            padding: '20px',
+            background: 'var(--bg-primary)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }}>
+            {/* Feed Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
+                  {showWishlistOnly ? 'Saved Favorites' : 'Places Within Reach'}
+                </h2>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                  Showing {filteredPlaces.length} locations within {radiusKm} km radius
+                </span>
+              </div>
+              <button
+                className="btn-secondary"
+                onClick={() => setIsMapOpen(false)}
+                style={{ padding: '6px 12px', fontSize: '12px' }}
+              >
+                ✕ Close Map View
+              </button>
+            </div>
+
+            {/* Place Cards Column */}
+            {filteredPlaces.length > 0 ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
+                {filteredPlaces.map((place) => {
+                  const dist = calculateDistanceKm(anchorCoords[0], anchorCoords[1], place.lat, place.lng);
+                  return (
+                    <PlaceCard
+                      key={place.id}
+                      place={place}
+                      distanceKm={dist}
+                      isBookmarked={wishlist.includes(place.id)}
+                      onToggleBookmark={handleToggleWishlist}
+                      onSelectPlace={setSelectedPlace}
+                      onNavigateTo={handleNavigateTo}
+                      onPlayAudio={handleToggleAudio}
+                      isPlayingAudio={playingAudioPlaceId === place.id}
+                    />
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{
+                padding: '60px 20px',
+                textAlign: 'center',
+                background: 'var(--bg-secondary)',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px dashed var(--border-subtle)',
+                marginTop: '20px'
+              }}>
+                <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '8px' }}>
+                  No places found within {radiusKm} km
+                </p>
+                <button
+                  className="btn-primary"
+                  onClick={() => {
+                    setRadiusKm(25);
+                    setActiveCategory('all');
+                    setSafetyFilter(false);
+                    setBudgetFilter(false);
+                  }}
+                >
+                  Expand Radius to 25 km
+                </button>
+              </div>
+            )}
+          </section>
+        </main>
+      ) : (
+        /* Default: Clean Full-Width Explorers Feed (Map Closed) */
+        <main style={{
+          flex: 1,
+          maxWidth: '1440px',
+          margin: '0 auto',
+          width: '100%',
+          padding: '24px 20px 80px 20px'
         }}>
-          {/* Feed Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          {/* Map Invitation Hero Banner */}
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.12), rgba(16, 185, 129, 0.12))',
+            border: '1px solid rgba(56, 189, 248, 0.25)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '18px 24px',
+            marginBottom: '24px',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '14px',
+            boxShadow: 'var(--shadow-sm)'
+          }}>
             <div>
-              <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
-                {showWishlistOnly ? 'Saved Favorites' : 'Places Within Reach'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '20px' }}>🗺️</span>
+                <strong style={{ fontSize: '16px', color: 'var(--text-main)' }}>
+                  Interactive Map Available On Demand
+                </strong>
+                <span style={{
+                  fontSize: '10px',
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  color: '#10b981',
+                  padding: '2px 8px',
+                  borderRadius: '99px',
+                  fontWeight: 700
+                }}>
+                  Zero API Key Required
+                </span>
+              </div>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+                Open the live map whenever you want to inspect safety caution heatzones, traffic bottlenecks, and dual-route paths.
+              </p>
+            </div>
+            <button
+              className="btn-primary"
+              onClick={() => setIsMapOpen(true)}
+              style={{ padding: '10px 20px', fontSize: '14px', borderRadius: 'var(--radius-md)' }}
+            >
+              <span>🗺️ Open Interactive Map View</span>
+            </button>
+          </div>
+
+          {/* Feed Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
+            <div>
+              <h2 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
+                {showWishlistOnly ? 'Saved Favorites' : `Explore ${activeCity.name}`}
               </h2>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                Showing {filteredPlaces.length} locations within {radiusKm} km radius
+              <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+                Showing {filteredPlaces.length} curated destinations within {radiusKm} km radius
               </span>
             </div>
-            {filteredPlaces.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                className="btn-secondary"
+                onClick={() => setIsMapOpen(true)}
+                style={{ padding: '8px 14px', fontSize: '13px' }}
+              >
+                <span>🗺️ View on Map</span>
+              </button>
               <span style={{
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: 700,
                 color: 'var(--accent-primary)',
                 background: 'rgba(56, 189, 248, 0.1)',
-                padding: '4px 8px',
+                padding: '6px 12px',
                 borderRadius: 'var(--radius-full)'
               }}>
                 Sorted by {sortBy}
               </span>
-            )}
+            </div>
           </div>
 
-          {/* Place Cards Grid */}
+          {/* Full-Width Place Cards Grid: 2-3 responsive columns */}
           {filteredPlaces.length > 0 ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+              gap: '18px'
+            }}>
               {filteredPlaces.map((place) => {
                 const dist = calculateDistanceKm(anchorCoords[0], anchorCoords[1], place.lat, place.lng);
                 return (
@@ -344,18 +482,18 @@ export function App() {
             </div>
           ) : (
             <div style={{
-              padding: '60px 20px',
+              padding: '80px 20px',
               textAlign: 'center',
               background: 'var(--bg-secondary)',
               borderRadius: 'var(--radius-lg)',
               border: '1px dashed var(--border-subtle)',
               marginTop: '20px'
             }}>
-              <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '8px' }}>
-                No places found within {radiusKm} km
+              <p style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '8px' }}>
+                No places found matching your active filters within {radiusKm} km
               </p>
-              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-                Try expanding the exploration radius slider on the top bar or reset active filters.
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                Try adjusting the radius slider or resetting category filters.
               </p>
               <button
                 className="btn-primary"
@@ -371,8 +509,42 @@ export function App() {
               </button>
             </div>
           )}
-        </section>
-      </main>
+        </main>
+      )}
+
+      {/* Floating Bottom Map Action Button (When Map is Closed) */}
+      {!isMapOpen && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 900
+        }}>
+          <button
+            onClick={() => setIsMapOpen(true)}
+            style={{
+              background: 'linear-gradient(135deg, #0f172a, #1e293b)',
+              color: '#38bdf8',
+              border: '2px solid #38bdf8',
+              borderRadius: '9999px',
+              padding: '12px 26px',
+              fontSize: '14px',
+              fontWeight: 700,
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5), 0 0 20px rgba(56, 189, 248, 0.4)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            <span>🗺️ View on Interactive Map</span>
+          </button>
+        </div>
+      )}
 
       {/* 5. Modals & Overlays */}
       {selectedPlace && (
