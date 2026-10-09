@@ -1,30 +1,30 @@
 import React, { useState } from 'react';
-import { X, Scale, Shield, Sparkles, MapPin, Footprints, ExternalLink, Award } from 'lucide-react';
+import { X, Scale, Shield, Sparkles, Wallet, Footprints, Train, CheckCircle2, XCircle, Award } from 'lucide-react';
+import { SEED_CITIES } from '../data/citiesData';
 
-export function BestVsWorstModal({ places = [], activeCity, onClose }) {
-  // Use currently loaded live online places for comparison
-  const availablePlaces = places.length >= 2 
-    ? places 
-    : [
-        { id: 'p1', name: activeCity?.name ? `${activeCity.name} Central Precinct` : 'Area 1', distanceKm: 1.2, lat: activeCity?.center?.[0] || 0, lng: activeCity?.center?.[1] || 0, category: 'heritage', description: 'Central urban district' },
-        { id: 'p2', name: activeCity?.name ? `${activeCity.name} Outer Enclave` : 'Area 2', distanceKm: 4.8, lat: activeCity?.center?.[0] || 0, lng: activeCity?.center?.[1] || 0, category: 'attraction', description: 'Surrounding quadrant' }
-      ];
+export function BestVsWorstModal({ activeCity, onClose }) {
+  // Aggregate all neighborhoods across seed cities for deep comparison flexibility
+  const availableNeighborhoods = activeCity.neighborhoodMatrix?.length > 1
+    ? activeCity.neighborhoodMatrix
+    : SEED_CITIES.flatMap(c => c.neighborhoodMatrix);
 
-  const [placeAId, setPlaceAId] = useState(availablePlaces[0]?.id || '');
-  const [placeBId, setPlaceBId] = useState(availablePlaces[1]?.id || availablePlaces[0]?.id || '');
+  const [areaAId, setAreaAId] = useState(availableNeighborhoods[0]?.id || '');
+  const [areaBId, setAreaBId] = useState(availableNeighborhoods[1]?.id || availableNeighborhoods[0]?.id || '');
 
-  const placeA = availablePlaces.find(p => p.id === placeAId) || availablePlaces[0];
-  const placeB = availablePlaces.find(p => p.id === placeBId) || availablePlaces[1];
+  const areaA = availableNeighborhoods.find(n => n.id === areaAId) || availableNeighborhoods[0];
+  const areaB = availableNeighborhoods.find(n => n.id === areaBId) || availableNeighborhoods[1];
 
   const metrics = [
-    { label: 'Safety & Civic Security', key: 'safety', icon: Shield, color: '#10b981', valA: placeA.safetyScore || 9.2, valB: placeB.safetyScore || 8.6 },
-    { label: 'Cleanliness & Ambiance', key: 'cleanliness', icon: Sparkles, color: '#38bdf8', valA: placeA.cleanlinessScore || 8.8, valB: placeB.cleanlinessScore || 8.2 },
-    { label: 'Proximity to Center', key: 'proximity', icon: MapPin, color: '#f59e0b', valA: (10 - Math.min(placeA.distanceKm || 1, 9)).toFixed(1), valB: (10 - Math.min(placeB.distanceKm || 1, 9)).toFixed(1) },
-    { label: 'Pedestrian Walkability', key: 'walkability', icon: Footprints, color: '#a855f7', valA: 9.0, valB: 8.5 }
+    { label: 'Safety & Security', key: 'safety', icon: Shield, color: '#10b981' },
+    { label: 'Cleanliness & Air', key: 'cleanliness', icon: Sparkles, color: '#38bdf8' },
+    { label: 'Affordability', key: 'affordability', icon: Wallet, color: '#f59e0b' },
+    { label: 'Pedestrian Walkability', key: 'walkability', icon: Footprints, color: '#a855f7' },
+    { label: 'Transit Connectivity', key: 'transit', icon: Train, color: '#06b6d4' }
   ];
 
-  const scoreA = metrics.reduce((acc, m) => acc + Number(m.valA), 0).toFixed(1);
-  const scoreB = metrics.reduce((acc, m) => acc + Number(m.valB), 0).toFixed(1);
+  // Calculate overall composite score out of 50
+  const scoreA = metrics.reduce((acc, m) => acc + (areaA[m.key] || 0), 0).toFixed(1);
+  const scoreB = metrics.reduce((acc, m) => acc + (areaB[m.key] || 0), 0).toFixed(1);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -48,11 +48,11 @@ export function BestVsWorstModal({ places = [], activeCity, onClose }) {
                 color: 'var(--accent-warning)',
                 letterSpacing: '0.04em'
               }}>
-                Live Exploration Matrix
+                City Reality Index
               </span>
             </div>
             <h2 style={{ fontSize: '20px', fontWeight: 800, margin: '4px 0 0 0', color: 'var(--text-main)' }}>
-              Side-by-Side Destination Comparison
+              Best vs. Worst Neighborhood Comparison Matrix
             </h2>
           </div>
           <button
@@ -78,233 +78,223 @@ export function BestVsWorstModal({ places = [], activeCity, onClose }) {
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Locality Selectors */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>
-                Destination A:
-              </label>
-              <select
-                value={placeAId}
-                onChange={(e) => setPlaceAId(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: 'var(--bg-tertiary)',
-                  color: 'var(--text-main)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '10px 12px',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  outline: 'none',
-                  cursor: 'pointer'
-                }}
-              >
-                {availablePlaces.map(p => (
-                  <option key={`a-${p.id}`} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>
-                Destination B:
-              </label>
-              <select
-                value={placeBId}
-                onChange={(e) => setPlaceBId(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: 'var(--bg-tertiary)',
-                  color: 'var(--text-main)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '10px 12px',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  outline: 'none',
-                  cursor: 'pointer'
-                }}
-              >
-                {availablePlaces.map(p => (
-                  <option key={`b-${p.id}`} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Side by Side Score Header */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            {/* Area A Header Card */}
+            {/* Area A Selector */}
             <div style={{
               background: 'var(--bg-tertiary)',
-              border: Number(scoreA) >= Number(scoreB) ? '2px solid #10b981' : '1px solid var(--border-subtle)',
+              padding: '14px',
               borderRadius: 'var(--radius-md)',
-              padding: '16px',
-              position: 'relative'
+              border: '1px solid var(--border-subtle)'
             }}>
-              {Number(scoreA) >= Number(scoreB) && (
-                <div style={{
-                  position: 'absolute',
-                  top: '-10px',
-                  right: '12px',
-                  background: '#10b981',
-                  color: '#000000',
-                  fontSize: '10px',
-                  fontWeight: 800,
-                  padding: '2px 8px',
-                  borderRadius: '99px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}>
-                  <Award size={12} />
-                  <span>HIGHER COMPOSITE INDEX</span>
-                </div>
-              )}
-              <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 4px 0', color: 'var(--text-main)' }}>
-                {placeA.name}
-              </h3>
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 12px 0' }}>
-                {placeA.distanceKm ? `${placeA.distanceKm} km from center` : 'Exploration Anchor'}
-              </p>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                <span style={{ fontSize: '28px', fontWeight: 800, color: '#10b981' }}>{scoreA}</span>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>/ 40 index pts</span>
+              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent-primary)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>
+                Locality A:
+              </label>
+              <select
+                value={areaAId}
+                onChange={(e) => setAreaAId(e.target.value)}
+                style={{
+                  width: '100%',
+                  background: 'var(--bg-secondary)',
+                  color: 'var(--text-main)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '9px 12px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  outline: 'none'
+                }}
+              >
+                {availableNeighborhoods.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    📍 {n.name}
+                  </option>
+                ))}
+              </select>
+              <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                {areaA.vibe}
               </div>
             </div>
 
-            {/* Area B Header Card */}
+            {/* Area B Selector */}
             <div style={{
               background: 'var(--bg-tertiary)',
-              border: Number(scoreB) > Number(scoreA) ? '2px solid #10b981' : '1px solid var(--border-subtle)',
+              padding: '14px',
               borderRadius: 'var(--radius-md)',
-              padding: '16px',
-              position: 'relative'
+              border: '1px solid var(--border-subtle)'
             }}>
-              {Number(scoreB) > Number(scoreA) && (
-                <div style={{
-                  position: 'absolute',
-                  top: '-10px',
-                  right: '12px',
-                  background: '#10b981',
-                  color: '#000000',
-                  fontSize: '10px',
-                  fontWeight: 800,
-                  padding: '2px 8px',
-                  borderRadius: '99px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}>
-                  <Award size={12} />
-                  <span>HIGHER COMPOSITE INDEX</span>
-                </div>
-              )}
-              <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 4px 0', color: 'var(--text-main)' }}>
-                {placeB.name}
-              </h3>
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: '0 0 12px 0' }}>
-                {placeB.distanceKm ? `${placeB.distanceKm} km from center` : 'Exploration Anchor'}
-              </p>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                <span style={{ fontSize: '28px', fontWeight: 800, color: '#38bdf8' }}>{scoreB}</span>
-                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>/ 40 index pts</span>
+              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent-warning)', textTransform: 'uppercase', marginBottom: '6px', display: 'block' }}>
+                Locality B:
+              </label>
+              <select
+                value={areaBId}
+                onChange={(e) => setAreaBId(e.target.value)}
+                style={{
+                  width: '100%',
+                  background: 'var(--bg-secondary)',
+                  color: 'var(--text-main)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '9px 12px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  outline: 'none'
+                }}
+              >
+                {availableNeighborhoods.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    📍 {n.name}
+                  </option>
+                ))}
+              </select>
+              <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                {areaB.vibe}
               </div>
             </div>
           </div>
 
-          {/* Metric Comparison Rows */}
+          {/* Metric Comparison Table with Visual Bars */}
           <div style={{
             background: 'var(--bg-tertiary)',
-            border: '1px solid var(--border-subtle)',
             borderRadius: 'var(--radius-md)',
-            overflow: 'hidden'
+            border: '1px solid var(--border-subtle)',
+            padding: '16px'
           }}>
-            {metrics.map((m, idx) => {
-              const Icon = m.icon;
-              return (
-                <div
-                  key={idx}
-                  style={{
-                    padding: '12px 16px',
-                    borderBottom: idx < metrics.length - 1 ? '1px solid var(--border-subtle)' : 'none',
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 140px 1fr',
-                    alignItems: 'center',
-                    gap: '12px'
-                  }}
-                >
-                  <div style={{ textAlign: 'right', fontWeight: 700, fontSize: '14px', color: 'var(--text-main)' }}>
-                    {m.valA} / 10
+            <h4 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '14px' }}>
+              Standardized Rating Breakdown (1 - 10 Scale)
+            </h4>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {metrics.map((m) => {
+                const valA = areaA[m.key] || 0;
+                const valB = areaB[m.key] || 0;
+                const isAWinner = valA > valB;
+                const isBWinner = valB > valA;
+                const Icon = m.icon;
+
+                return (
+                  <div key={m.key} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', fontWeight: 600 }}>
+                      <span style={{ color: isAWinner ? m.color : 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {isAWinner && '🏆'} {valA} / 10
+                      </span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)' }}>
+                        <Icon size={14} style={{ color: m.color }} />
+                        {m.label}
+                      </span>
+                      <span style={{ color: isBWinner ? m.color : 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {valB} / 10 {isBWinner && '🏆'}
+                      </span>
+                    </div>
+
+                    {/* Dual comparison bar */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      {/* Bar A (right aligned) */}
+                      <div style={{ background: 'var(--bg-secondary)', height: '8px', borderRadius: '4px', overflow: 'hidden', display: 'flex', justifyContent: 'flex-end' }}>
+                        <div style={{
+                          width: `${valA * 10}%`,
+                          background: isAWinner ? m.color : 'var(--text-dim)',
+                          borderRadius: '4px',
+                          transition: 'width 0.4s ease'
+                        }} />
+                      </div>
+                      {/* Bar B (left aligned) */}
+                      <div style={{ background: 'var(--bg-secondary)', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{
+                          width: `${valB * 10}%`,
+                          background: isBWinner ? m.color : 'var(--text-dim)',
+                          borderRadius: '4px',
+                          transition: 'width 0.4s ease'
+                        }} />
+                      </div>
+                    </div>
                   </div>
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '4px'
-                  }}>
-                    <Icon size={16} style={{ color: m.color }} />
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center', fontWeight: 600 }}>
-                      {m.label}
-                    </span>
-                  </div>
-                  <div style={{ textAlign: 'left', fontWeight: 700, fontSize: '14px', color: 'var(--text-main)' }}>
-                    {m.valB} / 10
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
 
-          {/* Live External Links for Places */}
+          {/* Pros, Cons & Crowd Levels Side-by-Side */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            {placeA.googleMapsDirectionsUrl && (
-              <a
-                href={placeA.googleMapsDirectionsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  padding: '8px',
-                  borderRadius: 'var(--radius-sm)',
-                  background: '#1a73e8',
-                  color: '#ffffff',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  textDecoration: 'none'
-                }}
-              >
-                <span>Navigate to {placeA.name.slice(0, 16)} in Maps</span>
-                <ExternalLink size={12} />
-              </a>
-            )}
+            {/* Area A Details */}
+            <div style={{
+              background: 'var(--bg-tertiary)',
+              padding: '14px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-subtle)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <strong style={{ fontSize: '13px', color: 'var(--accent-primary)' }}>{areaA.name}</strong>
+                <span style={{ fontSize: '11px', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '4px', color: 'var(--text-muted)' }}>
+                  Crowd: {areaA.crowdLevel}
+                </span>
+              </div>
+              <div style={{ marginBottom: '8px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#10b981', marginBottom: '4px' }}>Strengths:</div>
+                {areaA.pros?.map((p, idx) => (
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--text-main)', marginBottom: '2px' }}>
+                    <CheckCircle2 size={12} style={{ color: '#10b981', flexShrink: 0 }} /> {p}
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#ef4444', marginBottom: '4px' }}>Drawbacks:</div>
+                {areaA.cons?.map((c, idx) => (
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                    <XCircle size={12} style={{ color: '#ef4444', flexShrink: 0 }} /> {c}
+                  </div>
+                ))}
+              </div>
+            </div>
 
-            {placeB.googleMapsDirectionsUrl && (
-              <a
-                href={placeB.googleMapsDirectionsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  padding: '8px',
-                  borderRadius: 'var(--radius-sm)',
-                  background: '#1a73e8',
-                  color: '#ffffff',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  textDecoration: 'none'
-                }}
-              >
-                <span>Navigate to {placeB.name.slice(0, 16)} in Maps</span>
-                <ExternalLink size={12} />
-              </a>
-            )}
+            {/* Area B Details */}
+            <div style={{
+              background: 'var(--bg-tertiary)',
+              padding: '14px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-subtle)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <strong style={{ fontSize: '13px', color: 'var(--accent-warning)' }}>{areaB.name}</strong>
+                <span style={{ fontSize: '11px', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: '4px', color: 'var(--text-muted)' }}>
+                  Crowd: {areaB.crowdLevel}
+                </span>
+              </div>
+              <div style={{ marginBottom: '8px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#10b981', marginBottom: '4px' }}>Strengths:</div>
+                {areaB.pros?.map((p, idx) => (
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--text-main)', marginBottom: '2px' }}>
+                    <CheckCircle2 size={12} style={{ color: '#10b981', flexShrink: 0 }} /> {p}
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#ef4444', marginBottom: '4px' }}>Drawbacks:</div>
+                {areaB.cons?.map((c, idx) => (
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                    <XCircle size={12} style={{ color: '#ef4444', flexShrink: 0 }} /> {c}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* AI Composite Verdict */}
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.1), rgba(16, 185, 129, 0.1))',
+            border: '1px solid rgba(56, 189, 248, 0.3)',
+            borderRadius: 'var(--radius-md)',
+            padding: '16px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+              <Award size={18} style={{ color: 'var(--accent-primary)' }} />
+              <strong style={{ fontSize: '14px', color: 'var(--text-main)' }}>
+                exploreKaro Urban Reality Verdict:
+              </strong>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-main)', lineHeight: 1.5, margin: 0 }}>
+              {Number(scoreA) > Number(scoreB)
+                ? `${areaA.name} scores higher overall (${scoreA}/50 vs ${scoreB}/50), offering superior safety and walking infrastructure. However, ${areaB.name} is significantly better for budget shopping and authentic street food. Choose ${areaA.name} for evening stays and relaxed walks, and ${areaB.name} for daytime explorations.`
+                : `${areaB.name} leads overall (${scoreB}/50 vs ${scoreA}/50) with better cleanliness and connectivity. Meanwhile, ${areaA.name} shines for unique character. For family stays and solo travelers, ${areaB.name} is recommended.`}
+            </p>
           </div>
         </div>
 
@@ -317,7 +307,7 @@ export function BestVsWorstModal({ places = [], activeCity, onClose }) {
           background: 'var(--bg-tertiary)'
         }}>
           <button className="btn-secondary" onClick={onClose}>
-            Close Comparison Matrix
+            Close Comparison
           </button>
         </div>
       </div>

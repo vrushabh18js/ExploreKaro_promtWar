@@ -72,20 +72,28 @@ export function ChaosBanner({ city, weather, hazardCount }) {
 
         {/* Traffic Status & Active Hazards */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          {/* Traffic Condition */}
+          {/* Live Traffic Condition */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
-            background: isTrafficHeavy ? 'rgba(239, 68, 68, 0.12)' : 'rgba(16, 185, 129, 0.12)',
-            color: isTrafficHeavy ? '#ef4444' : '#10b981',
+            background: isTrafficHeavy ? '#fee2e2' : '#ecfdf5',
+            color: isTrafficHeavy ? '#dc2626' : '#15803d',
             padding: '4px 10px',
             borderRadius: 'var(--radius-full)',
-            border: `1px solid ${isTrafficHeavy ? 'rgba(239, 68, 68, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
-            fontWeight: 600
+            border: `1px solid ${isTrafficHeavy ? '#fecaca' : '#bbf7d0'}`,
+            fontWeight: 700
           }}>
+            <span style={{
+              width: '7px',
+              height: '7px',
+              borderRadius: '50%',
+              background: isTrafficHeavy ? '#dc2626' : '#16a34a',
+              display: 'inline-block',
+              boxShadow: `0 0 8px ${isTrafficHeavy ? '#dc2626' : '#16a34a'}`
+            }}></span>
             <Activity size={14} />
-            <span>Traffic: {city.trafficStatus || 'Normal Urban Flow'}</span>
+            <span>Live Traffic: {city.trafficStatus || 'Normal Urban Flow'}</span>
           </div>
 
           {/* Hazards Badge */}

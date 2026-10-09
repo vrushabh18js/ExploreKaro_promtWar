@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Header } from './components/Header';
 import { ChaosBanner } from './components/ChaosBanner';
 import { MapViewer } from './components/MapViewer';
@@ -9,51 +9,25 @@ import { RoutePlannerModal } from './components/RoutePlannerModal';
 import { BestVsWorstModal } from './components/BestVsWorstModal';
 import { CitizenDispatchModal } from './components/CitizenDispatchModal';
 import { SmartVoiceAssistant } from './components/SmartVoiceAssistant';
-import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 
-import { 
-  calculateDistanceKm, 
-  fetchNearbyPlacesOnline, 
-  fetchLiveWeather, 
-  reverseGeocodeOnline 
-} from './services/apiService';
+import { SEED_CITIES, calculateDistanceKm } from './data/citiesData';
+import { fetchLiveWeather, generateDynamicPOIs, reverseGeocode } from './services/apiService';
 import { getStoredReports, saveCitizenReport, getStoredWishlist, toggleWishlistPlace } from './services/storageService';
 import { listenToLiveCitizenReports, pushLiveCitizenReport, trackAnalyticsEvent } from './services/firebaseService';
 
 export function App() {
-  // Theme state
-  const [theme, setTheme] = useState('dark');
-
-  // Active Location Anchor (Starts as global prompt, auto-detects GPS or initial destination)
-  const [activeLocation, setActiveLocation] = useState({
-    id: 'initial-loc',
-    name: 'Mumbai',
-    fullName: 'Mumbai, Maharashtra, India',
-    center: [18.9220, 72.8347],
-    lat: 18.9220,
-    lng: 72.8347
-  });
-
+  // Active City & Location Anchor
+  const [activeCity, setActiveCity] = useState(SEED_CITIES[0]);
+  const [anchorCoords, setAnchorCoords] = useState(SEED_CITIES[0].center);
   const [radiusKm, setRadiusKm] = useState(12);
 
-  // Weather & Live status from Open-Meteo
-  const [weather, setWeather] = useState({
-    temp: 28,
-    condition: 'Partly Sunny',
-    rainProb: 15,
-    aqi: 80,
-    aqiLabel: 'Live'
-  });
+  // Weather & Live status
+  const [weather, setWeather] = useState(SEED_CITIES[0].weatherSim);
 
-  // Real Online Places list, Loading & Error states
-  const [onlinePlaces, setOnlinePlaces] = useState([]);
-  const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
-  const [placesError, setPlacesError] = useState(null);
-
-  // Citizen Hazards from Firebase Realtime Cloud
+  // Places and Citizen Hazards
+  const [customPlaces, setCustomPlaces] = useState([]);
   const [userReports, setUserReports] = useState([]);
   const [userGpsCoords, setUserGpsCoords] = useState(null);
-  const [isLoadingGPS, setIsLoadingGPS] = useState(false);
 
   // Filters & Sorting
   const [activeCategory, setActiveCategory] = useState('all');
@@ -84,11 +58,13 @@ export function App() {
   // Audio Speech Synthesis state
   const [playingAudioPlaceId, setPlayingAudioPlaceId] = useState(null);
 
-  // Initialize LocalStorage and Realtime Firebase Cloud Listener
+  // Initialize from LocalStorage, Realtime Firebase, and Enforce Light Theme
   useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'light');
     setUserReports(getStoredReports());
     setWishlist(getStoredWishlist());
 
+    // Connect Realtime Firebase Cloud Listener for Live Community Hazard Alerts
     const unsubscribe = listenToLiveCitizenReports((cloudReports) => {
       if (cloudReports && cloudReports.length > 0) {
         setUserReports((prev) => {
@@ -107,87 +83,99 @@ export function App() {
     return () => unsubscribe && unsubscribe();
   }, []);
 
-  // Update Theme attribute on HTML element
+  // Handle City Change & Weather fetch
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-  }, [theme]);
-
-  // Fetch Real Online Places & Weather whenever activeLocation or radiusKm changes
-  const loadRealTimeData = useCallback(async (lat, lng, radius) => {
-    setIsLoadingPlaces(true);
-    setPlacesError(null);
+    setAnchorCoords(activeCity.center);
     setActiveRoutePolyline(null);
+    setKeywordFilter(''); // Reset search filter on city change
 
-    // 1. Fetch real online weather from Open-Meteo
-    fetchLiveWeather(lat, lng).then((w) => setWeather(w)).catch(() => {});
+    // Fetch live weather from Open-Meteo
+    fetchLiveWeather(activeCity.center[0], activeCity.center[1]).then((res) => {
+      setWeather(res);
+    });
 
-    // 2. Fetch real online places from Wikipedia & Wikimedia Commons
-    try {
-      const places = await fetchNearbyPlacesOnline(lat, lng, radius, 'all');
-      setOnlinePlaces(places);
-      if (places.length === 0) {
-        setPlacesError(`No geo-tagged tourist places found within ${radius} km radius on online registers. Try increasing the search radius.`);
-      }
-    } catch (err) {
-      setPlacesError(err.message || 'Unable to connect to online places directory.');
-      setOnlinePlaces([]);
-    } finally {
-      setIsLoadingPlaces(false);
+    // If it's a custom location, generate dynamic POIs
+    if (activeCity.isCustom) {
+      const generated = generateDynamicPOIs(
+        activeCity.center[0], 
+        activeCity.center[1], 
+        activeCity.name, 
+        activeCity.state
+      );
+      setCustomPlaces(generated);
+    } else {
+      setCustomPlaces([]);
     }
-  }, []);
+  }, [activeCity]);
 
-  // Initial load or on activeLocation change
-  useEffect(() => {
-    if (activeLocation?.lat && activeLocation?.lng) {
-      loadRealTimeData(activeLocation.lat, activeLocation.lng, radiusKm);
-    }
-  }, [activeLocation, radiusKm, loadRealTimeData]);
+  // Aggregate All Places for Active City / Custom Location
+  const allCurrentPlaces = useMemo(() => {
+    const list = activeCity.isCustom ? customPlaces : (activeCity.places || []);
+    return list;
+  }, [activeCity, customPlaces]);
 
-  // Filter Places by Category, Safety, Budget, Wishlist & Keyword
+  // Aggregate Hazards (Seed hazards + Stored user reports for this area)
+  const allHazards = useMemo(() => {
+    const seed = activeCity.safetyHazards || [];
+    return [...userReports, ...seed];
+  }, [activeCity, userReports]);
+
+  // Filter Places by Distance / Radius, Category, Safety, Budget, Wishlist & Keyword
   const filteredPlaces = useMemo(() => {
-    return onlinePlaces.filter((place) => {
+    return allCurrentPlaces.filter((place) => {
+      // Radius distance check
+      const dist = calculateDistanceKm(anchorCoords[0], anchorCoords[1], place.lat, place.lng);
+      if (dist > radiusKm) return false;
+
       // Category check
       if (activeCategory !== 'all' && place.category !== activeCategory) return false;
 
       // Safety check (Score >= 8.5)
-      if (safetyFilter && (place.safetyScore || 9) < 8.5) return false;
+      if (safetyFilter && place.safetyScore < 8.5) return false;
 
-      // Budget check
+      // Budget check (₹ or ₹₹)
       if (budgetFilter && place.priceLevel !== '₹' && place.priceLevel !== '₹₹') return false;
 
       // Wishlist check
       if (showWishlistOnly && !wishlist.includes(place.id)) return false;
 
-      // Keyword filter check
+      // Keyword filter check (matches title, tags, lore, or cuisine)
       if (keywordFilter && keywordFilter.trim()) {
         const kw = keywordFilter.toLowerCase().trim();
         const matchName = place.name.toLowerCase().includes(kw);
         const matchDesc = (place.description || '').toLowerCase().includes(kw);
         const matchLore = (place.historicalLore || '').toLowerCase().includes(kw);
         const matchTags = (place.tags || []).some(t => t.toLowerCase().includes(kw));
-        if (!matchName && !matchDesc && !matchLore && !matchTags) return false;
+        const matchCat = (place.category || '').toLowerCase().includes(kw);
+        if (!matchName && !matchDesc && !matchLore && !matchTags && !matchCat) return false;
       }
 
       return true;
     }).sort((a, b) => {
-      const distA = a.distanceKm || calculateDistanceKm(activeLocation.lat, activeLocation.lng, a.lat, a.lng);
-      const distB = b.distanceKm || calculateDistanceKm(activeLocation.lat, activeLocation.lng, b.lat, b.lng);
+      const distA = calculateDistanceKm(anchorCoords[0], anchorCoords[1], a.lat, a.lng);
+      const distB = calculateDistanceKm(anchorCoords[0], anchorCoords[1], b.lat, b.lng);
 
       if (sortBy === 'distance') return distA - distB;
-      if (sortBy === 'rating') return Number(b.rating || 0) - Number(a.rating || 0);
-      if (sortBy === 'safety') return Number(b.safetyScore || 0) - Number(a.safetyScore || 0);
+      if (sortBy === 'rating') return b.rating - a.rating;
+      if (sortBy === 'safety') return b.safetyScore - a.safetyScore;
+      if (sortBy === 'cleanliness') return b.cleanlinessScore - a.cleanlinessScore;
+      if (sortBy === 'affordability') return a.priceLevel.length - b.priceLevel.length;
       return 0;
     });
-  }, [onlinePlaces, activeLocation, activeCategory, safetyFilter, budgetFilter, showWishlistOnly, wishlist, keywordFilter, sortBy]);
+  }, [allCurrentPlaces, anchorCoords, radiusKm, activeCategory, safetyFilter, budgetFilter, showWishlistOnly, wishlist, keywordFilter, sortBy]);
 
-  // Category counts from real live places
+  // Category counts
   const categoryCounts = useMemo(() => {
-    const counts = { all: onlinePlaces.length, heritage: 0, food: 0, hidden_gem: 0, hotel: 0 };
-    onlinePlaces.forEach((p) => {
-      if (counts[p.category] !== undefined) counts[p.category]++;
+    const counts = { all: 0, heritage: 0, food: 0, hidden_gem: 0, hotel: 0 };
+    allCurrentPlaces.forEach((p) => {
+      const dist = calculateDistanceKm(anchorCoords[0], anchorCoords[1], p.lat, p.lng);
+      if (dist <= radiusKm) {
+        counts.all++;
+        if (counts[p.category] !== undefined) counts[p.category]++;
+      }
     });
     return counts;
-  }, [onlinePlaces]);
+  }, [allCurrentPlaces, anchorCoords, radiusKm]);
 
   // Wishlist Handler
   const handleToggleWishlist = (placeId) => {
@@ -195,55 +183,46 @@ export function App() {
     setWishlist(updated);
   };
 
-  // Citizen Report Submission Handler
+  // Citizen Report Submission Handler (Syncs to LocalStorage & Firebase Realtime Cloud)
   const handleCitizenReportSubmit = (newReport) => {
     saveCitizenReport(newReport);
     pushLiveCitizenReport(newReport);
     setUserReports((prev) => [newReport, ...prev]);
   };
 
-  // GPS Location Detection via Browser Geolocation API
+  // GPS Location Detection
   const handleDetectGPS = () => {
     if (!navigator.geolocation) {
       alert('Geolocation is not supported by your browser.');
       return;
     }
-
-    setIsLoadingGPS(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
         setUserGpsCoords([lat, lng]);
+        setAnchorCoords([lat, lng]);
 
-        try {
-          const locationName = await reverseGeocodeOnline(lat, lng);
-          setActiveLocation({
-            id: `gps-${Date.now()}`,
-            name: locationName.split(',')[0],
-            fullName: locationName,
-            center: [lat, lng],
-            lat,
-            lng
-          });
-        } catch {
-          setActiveLocation({
-            id: `gps-${Date.now()}`,
-            name: 'My GPS Location',
-            fullName: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
-            center: [lat, lng],
-            lat,
-            lng
-          });
-        } finally {
-          setIsLoadingGPS(false);
-        }
+        const locationName = await reverseGeocode(lat, lng);
+        setActiveCity({
+          id: `gps-loc-${Date.now()}`,
+          name: locationName.split(',')[0],
+          state: 'My Current GPS Location',
+          tagline: 'Precision Live Exploration Anchor',
+          center: [lat, lng],
+          zoom: 14,
+          isCustom: true,
+          weatherSim: { temp: 29, condition: 'Clear', rainProb: 10, aqi: 85, aqiLabel: 'Good' },
+          trafficStatus: 'Local Traffic Flow',
+          places: [],
+          neighborhoodMatrix: [],
+          safetyHazards: []
+        });
       },
       (err) => {
-        setIsLoadingGPS(false);
-        alert('Could not retrieve GPS location: ' + err.message + '. Please ensure location permission is allowed.');
+        alert('Could not retrieve GPS location: ' + err.message);
       },
-      { timeout: 10000, enableHighAccuracy: true }
+      { timeout: 8000 }
     );
   };
 
@@ -272,30 +251,26 @@ export function App() {
 
   // Trigger Navigation to Place
   const handleNavigateTo = (destPlace) => {
-    const origin = onlinePlaces.find(p => p.id !== destPlace.id) || destPlace;
+    const origin = allCurrentPlaces.find(p => p.id !== destPlace.id) || destPlace;
     setNavOriginPlace(origin);
     setNavDestPlace(destPlace);
     setIsNavModalOpen(true);
-    setIsMapOpen(true);
+    setIsMapOpen(true); // Open map when navigating
   };
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* 1. Header Navigation Bar (Global Online Geocoding Search) */}
+      {/* 1. Header Navigation Bar */}
       <Header
-        activeCity={activeLocation}
-        onSelectLocation={(loc) => {
-          setActiveLocation(loc);
-          setKeywordFilter('');
-        }}
+        activeCity={activeCity}
+        onSelectCity={setActiveCity}
         userLocation={userGpsCoords}
         onDetectGPS={handleDetectGPS}
-        isLoadingGPS={isLoadingGPS}
         radiusKm={radiusKm}
         onChangeRadius={setRadiusKm}
         onOpenNavigation={() => {
-          setNavOriginPlace(onlinePlaces[0] || null);
-          setNavDestPlace(onlinePlaces[1] || onlinePlaces[0] || null);
+          setNavOriginPlace(allCurrentPlaces[0] || null);
+          setNavDestPlace(allCurrentPlaces[1] || allCurrentPlaces[0] || null);
           setIsNavModalOpen(true);
           setIsMapOpen(true);
         }}
@@ -305,17 +280,15 @@ export function App() {
         wishlistCount={wishlist.length}
         onToggleWishlistFilter={() => setShowWishlistOnly(!showWishlistOnly)}
         showWishlistOnly={showWishlistOnly}
-        theme={theme}
-        onToggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
         isMapOpen={isMapOpen}
         onToggleMap={() => setIsMapOpen(!isMapOpen)}
       />
 
-      {/* 2. Realtime Meteorological & Incident Banner */}
+      {/* 2. Realtime Urban Chaos Barometer */}
       <ChaosBanner
-        city={activeLocation}
+        city={activeCity}
         weather={weather}
-        hazardCount={userReports.length}
+        hazardCount={allHazards.length}
       />
 
       {/* 3. Category Filter & Sorting Bar */}
@@ -333,60 +306,23 @@ export function App() {
         counts={categoryCounts}
       />
 
-      {/* Online Error / Notice Banner */}
-      {placesError && !isLoadingPlaces && (
-        <div style={{
-          maxWidth: '1440px',
-          margin: '16px auto 0 auto',
-          padding: '12px 20px',
-          width: 'calc(100% - 40px)',
-          background: 'rgba(239, 68, 68, 0.12)',
-          border: '1px solid rgba(239, 68, 68, 0.3)',
-          borderRadius: 'var(--radius-md)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444', fontSize: '13px' }}>
-            <AlertCircle size={16} style={{ flexShrink: 0 }} />
-            <span>{placesError}</span>
-          </div>
-          <button
-            className="btn-secondary"
-            onClick={() => loadRealTimeData(activeLocation.lat, activeLocation.lng, radiusKm)}
-            style={{ padding: '6px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}
-          >
-            <RefreshCw size={12} />
-            <span>Retry Query</span>
-          </button>
-        </div>
-      )}
-
       {/* 4. Main Viewport: On-Demand Map OR Full-Width Discovery Feed */}
       {isMapOpen ? (
         <main className="main-viewport-grid">
           {/* Left: Interactive Leaflet Map (On-Demand) */}
           <section className="main-viewport-map-col" style={{ height: '100%', position: 'relative' }}>
             <MapViewer
-              center={[activeLocation.lat, activeLocation.lng]}
+              center={anchorCoords}
               radiusKm={radiusKm}
               places={filteredPlaces}
-              hazards={userReports}
+              hazards={allHazards}
               selectedPlace={selectedPlace}
               onSelectPlace={setSelectedPlace}
               onNavigateTo={handleNavigateTo}
               activeRoutePolyline={activeRoutePolyline}
               onClose={() => setIsMapOpen(false)}
               onMapClick={(latlng) => {
-                setActiveLocation({
-                  id: `map-${Date.now()}`,
-                  name: `Selected Coordinates`,
-                  fullName: `${latlng.lat.toFixed(4)}, ${latlng.lng.toFixed(4)}`,
-                  center: [latlng.lat, latlng.lng],
-                  lat: latlng.lat,
-                  lng: latlng.lng
-                });
+                setAnchorCoords([latlng.lat, latlng.lng]);
               }}
             />
           </section>
@@ -401,13 +337,14 @@ export function App() {
             flexDirection: 'column',
             gap: '16px'
           }}>
+            {/* Feed Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
-                  {showWishlistOnly ? 'Saved Favorites' : 'Live Verified Destinations'}
+                  {showWishlistOnly ? 'Saved Favorites' : 'Places Within Reach'}
                 </h2>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                  {isLoadingPlaces ? 'Querying online servers...' : `Found ${filteredPlaces.length} real places within ${radiusKm} km`}
+                  Showing {filteredPlaces.length} locations within {radiusKm} km radius
                 </span>
               </div>
               <button
@@ -419,42 +356,46 @@ export function App() {
               </button>
             </div>
 
-            {/* Loading Indicator */}
-            {isLoadingPlaces ? (
-              <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent-primary)', margin: '0 auto 10px auto' }} />
-                <p style={{ fontSize: '13px', margin: 0 }}>Querying Wikipedia & Wikimedia Commons real-time places directory...</p>
-              </div>
-            ) : filteredPlaces.length > 0 ? (
+            {/* Place Cards Column */}
+            {filteredPlaces.length > 0 ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '14px' }}>
-                {filteredPlaces.map((place) => (
-                  <PlaceCard
-                    key={place.id}
-                    place={place}
-                    distanceKm={place.distanceKm}
-                    isBookmarked={wishlist.includes(place.id)}
-                    onToggleBookmark={handleToggleWishlist}
-                    onSelectPlace={setSelectedPlace}
-                    onNavigateTo={handleNavigateTo}
-                    onPlayAudio={handleToggleAudio}
-                    isPlayingAudio={playingAudioPlaceId === place.id}
-                  />
-                ))}
+                {filteredPlaces.map((place) => {
+                  const dist = calculateDistanceKm(anchorCoords[0], anchorCoords[1], place.lat, place.lng);
+                  return (
+                    <PlaceCard
+                      key={place.id}
+                      place={place}
+                      distanceKm={dist}
+                      isBookmarked={wishlist.includes(place.id)}
+                      onToggleBookmark={handleToggleWishlist}
+                      onSelectPlace={setSelectedPlace}
+                      onNavigateTo={handleNavigateTo}
+                      onPlayAudio={handleToggleAudio}
+                      isPlayingAudio={playingAudioPlaceId === place.id}
+                    />
+                  );
+                })}
               </div>
             ) : (
               <div style={{
-                padding: '50px 20px',
+                padding: '60px 20px',
                 textAlign: 'center',
                 background: 'var(--bg-secondary)',
                 borderRadius: 'var(--radius-lg)',
-                border: '1px dashed var(--border-subtle)'
+                border: '1px dashed var(--border-subtle)',
+                marginTop: '20px'
               }}>
-                <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '8px' }}>
-                  No verified places found within {radiusKm} km
+                <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '8px' }}>
+                  No places found within {radiusKm} km
                 </p>
                 <button
                   className="btn-primary"
-                  onClick={() => setRadiusKm(25)}
+                  onClick={() => {
+                    setRadiusKm(25);
+                    setActiveCategory('all');
+                    setSafetyFilter(false);
+                    setBudgetFilter(false);
+                  }}
                 >
                   Expand Radius to 25 km
                 </button>
@@ -489,7 +430,7 @@ export function App() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '20px' }}>🗺️</span>
                 <strong style={{ fontSize: '16px', color: 'var(--text-main)' }}>
-                  Interactive Live Map Available On Demand
+                  Interactive Map Available On Demand
                 </strong>
                 <span style={{
                   fontSize: '10px',
@@ -503,7 +444,7 @@ export function App() {
                 </span>
               </div>
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-                Explore live pins plotted from real GPS coordinates with community incident heatmaps.
+                Open the live map whenever you want to inspect safety caution heatzones, traffic bottlenecks, and dual-route paths.
               </p>
             </div>
             <button
@@ -516,13 +457,13 @@ export function App() {
           </div>
 
           {/* Feed Header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
             <div>
               <h2 style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
-                {showWishlistOnly ? 'Saved Favorites' : `Real-Time Exploration: ${activeLocation.name}`}
+                {showWishlistOnly ? 'Saved Favorites' : `Explore ${activeCity.name}`}
               </h2>
               <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                {isLoadingPlaces ? 'Streaming live places...' : `Showing ${filteredPlaces.length} verified destinations within ${radiusKm} km radius`}
+                Showing {filteredPlaces.length} curated destinations within {radiusKm} km radius
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -546,43 +487,29 @@ export function App() {
             </div>
           </div>
 
-          {/* Loading Skeleton */}
-          {isLoadingPlaces ? (
-            <div style={{
-              padding: '80px 20px',
-              textAlign: 'center',
-              background: 'var(--bg-secondary)',
-              borderRadius: 'var(--radius-lg)',
-              border: '1px solid var(--border-subtle)'
-            }}>
-              <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent-primary)', margin: '0 auto 16px auto' }} />
-              <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-main)', margin: '0 0 6px 0' }}>
-                Querying Live Online Places Directory
-              </h3>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
-                Retrieving real Wikipedia geo-articles, Wikimedia photography, and verified historical lore...
-              </p>
-            </div>
-          ) : filteredPlaces.length > 0 ? (
-            /* Full-Width Place Cards Grid */
+          {/* Full-Width Place Cards Grid: 2-3 responsive columns */}
+          {filteredPlaces.length > 0 ? (
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
               gap: '18px'
             }}>
-              {filteredPlaces.map((place) => (
-                <PlaceCard
-                  key={place.id}
-                  place={place}
-                  distanceKm={place.distanceKm}
-                  isBookmarked={wishlist.includes(place.id)}
-                  onToggleBookmark={handleToggleWishlist}
-                  onSelectPlace={setSelectedPlace}
-                  onNavigateTo={handleNavigateTo}
-                  onPlayAudio={handleToggleAudio}
-                  isPlayingAudio={playingAudioPlaceId === place.id}
-                />
-              ))}
+              {filteredPlaces.map((place) => {
+                const dist = calculateDistanceKm(anchorCoords[0], anchorCoords[1], place.lat, place.lng);
+                return (
+                  <PlaceCard
+                    key={place.id}
+                    place={place}
+                    distanceKm={dist}
+                    isBookmarked={wishlist.includes(place.id)}
+                    onToggleBookmark={handleToggleWishlist}
+                    onSelectPlace={setSelectedPlace}
+                    onNavigateTo={handleNavigateTo}
+                    onPlayAudio={handleToggleAudio}
+                    isPlayingAudio={playingAudioPlaceId === place.id}
+                  />
+                );
+              })}
             </div>
           ) : (
             <div style={{
@@ -594,10 +521,10 @@ export function App() {
               marginTop: '20px'
             }}>
               <p style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '8px' }}>
-                No online places found matching your filters within {radiusKm} km
+                No places found matching your active filters within {radiusKm} km
               </p>
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
-                Expand your radius or search another city, landmark, or region worldwide.
+                Try adjusting the radius slider or resetting category filters.
               </p>
               <button
                 className="btn-primary"
@@ -628,14 +555,14 @@ export function App() {
           <button
             onClick={() => setIsMapOpen(true)}
             style={{
-              background: 'linear-gradient(135deg, #0f172a, #1e293b)',
-              color: '#38bdf8',
-              border: '2px solid #38bdf8',
+              background: 'linear-gradient(135deg, #0284c7, #0369a1)',
+              color: '#ffffff',
+              border: '2px solid #ffffff',
               borderRadius: '9999px',
               padding: '12px 26px',
               fontSize: '14px',
               fontWeight: 700,
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.5), 0 0 20px rgba(56, 189, 248, 0.4)',
+              boxShadow: '0 8px 24px rgba(2, 132, 199, 0.35), 0 2px 6px rgba(0, 0, 0, 0.08)',
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
@@ -667,8 +594,8 @@ export function App() {
         <RoutePlannerModal
           originPlace={navOriginPlace}
           destinationPlace={navDestPlace}
-          allPlaces={onlinePlaces}
-          userCoords={userGpsCoords}
+          allPlaces={allCurrentPlaces}
+          hazards={allHazards}
           onClose={() => setIsNavModalOpen(false)}
           onApplyRoute={(route) => setActiveRoutePolyline(route)}
         />
@@ -676,16 +603,15 @@ export function App() {
 
       {isComparisonOpen && (
         <BestVsWorstModal
-          places={onlinePlaces}
-          activeCity={activeLocation}
+          activeCity={activeCity}
           onClose={() => setIsComparisonOpen(false)}
         />
       )}
 
       {isDispatchOpen && (
         <CitizenDispatchModal
-          currentLocation={[activeLocation.lat, activeLocation.lng]}
-          cityName={activeLocation.name}
+          currentLocation={anchorCoords}
+          cityName={activeCity.name}
           onClose={() => setIsDispatchOpen(false)}
           onSubmitReport={handleCitizenReportSubmit}
         />
@@ -693,19 +619,12 @@ export function App() {
 
       {isAIModalOpen && (
         <SmartVoiceAssistant
-          allPlaces={onlinePlaces}
-          cityName={activeLocation.name}
+          allPlaces={allCurrentPlaces}
+          cityName={activeCity.name}
           onClose={() => setIsAIModalOpen(false)}
           onApplyAIRecommendation={(place) => {
             setSelectedPlace(place);
-            setActiveLocation({
-              id: place.id,
-              name: place.name,
-              fullName: place.name,
-              center: [place.lat, place.lng],
-              lat: place.lat,
-              lng: place.lng
-            });
+            setAnchorCoords([place.lat, place.lng]);
           }}
         />
       )}

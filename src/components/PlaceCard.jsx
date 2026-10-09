@@ -1,5 +1,5 @@
 import React from 'react';
-import { Star, Volume2, Navigation, Bookmark, MapPin, ExternalLink, Globe } from 'lucide-react';
+import { Star, Shield, Sparkles, Volume2, Navigation, Bookmark, Clock, MapPin } from 'lucide-react';
 
 export function PlaceCard({
   place,
@@ -15,8 +15,8 @@ export function PlaceCard({
     heritage: '🏛️ Heritage & Lore',
     food: '🍲 Authentic Food',
     hotel: '🏨 Stay & Hospitality',
-    hidden_gem: '💎 Scenic Gem',
-    attraction: '🎡 Landmark & Attraction'
+    hidden_gem: '💎 Hidden Gem',
+    attraction: '🎡 City Attraction'
   };
 
   return (
@@ -25,7 +25,7 @@ export function PlaceCard({
         background: 'var(--bg-card)',
         border: '1px solid var(--border-subtle)',
         borderRadius: 'var(--radius-lg)',
-        overflow: 'hidden',
+        padding: '16px',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
@@ -46,43 +46,8 @@ export function PlaceCard({
       }}
       onClick={() => onSelectPlace(place)}
     >
-      {/* Real Online Photo Banner (Wikimedia Commons) */}
-      {place.photoUrl && (
-        <div style={{ height: '140px', width: '100%', position: 'relative', overflow: 'hidden', background: '#0f172a' }}>
-          <img
-            src={place.photoUrl}
-            alt={place.name}
-            loading="lazy"
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-          />
-          <div style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: '40px',
-            background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)'
-          }} />
-          <span style={{
-            position: 'absolute',
-            top: '8px',
-            left: '8px',
-            fontSize: '10px',
-            fontWeight: 700,
-            background: 'rgba(0,0,0,0.65)',
-            color: '#38bdf8',
-            padding: '2px 8px',
-            borderRadius: '4px',
-            backdropFilter: 'blur(4px)'
-          }}>
-            📷 Wikimedia Verified
-          </span>
-        </div>
-      )}
-
-      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', flex: 1 }}>
-        {/* Top Meta: Category, Distance & Bookmark */}
+      {/* Top Meta: Category, Distance & Bookmark */}
+      <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
           <span style={{
             fontSize: '11px',
@@ -136,88 +101,140 @@ export function PlaceCard({
           </div>
         </div>
 
-        {/* Title */}
-        <h3 style={{
-          fontSize: '16px',
-          fontWeight: 700,
-          color: 'var(--text-main)',
-          margin: '0 0 6px 0',
-          lineHeight: 1.3
-        }}>
-          {place.name}
-        </h3>
-
-        {/* Real GPS Coordinates */}
-        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <MapPin size={11} style={{ color: 'var(--accent-primary)' }} />
-          <span>Real Coordinates: {place.lat?.toFixed(4)}, {place.lng?.toFixed(4)}</span>
+        {/* Title & Rating */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '10px', marginBottom: '6px' }}>
+          <h3 style={{
+            fontSize: '16px',
+            fontWeight: 700,
+            color: 'var(--text-main)',
+            margin: 0,
+            lineHeight: 1.3
+          }}>
+            {place.name}
+          </h3>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '3px',
+            background: 'rgba(245, 158, 11, 0.15)',
+            color: '#fbbf24',
+            padding: '2px 6px',
+            borderRadius: '6px',
+            fontSize: '12px',
+            fontWeight: 700,
+            flexShrink: 0
+          }}>
+            <Star size={12} fill="currentColor" />
+            <span>{place.rating}</span>
+          </div>
         </div>
 
-        {/* Short Verified Description */}
+        {/* Short Description */}
         <p style={{
           fontSize: '12px',
           color: 'var(--text-muted)',
           lineHeight: 1.45,
-          marginBottom: '14px',
+          marginBottom: '12px',
           display: '-webkit-box',
-          WebkitLineClamp: 3,
+          WebkitLineClamp: 2,
           WebkitBoxOrient: 'vertical',
-          overflow: 'hidden',
-          flex: 1
+          overflow: 'hidden'
         }}>
           {place.description}
         </p>
 
-        {/* External Quick Links: Google Maps Directions & Wikipedia */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
-          {place.googleMapsDirectionsUrl && (
-            <a
-              href={place.googleMapsDirectionsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                color: '#38bdf8',
-                background: 'rgba(56, 189, 248, 0.1)',
-                padding: '3px 8px',
-                borderRadius: '4px',
-                textDecoration: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}
-            >
-              <span>Google Maps</span>
-              <ExternalLink size={10} />
-            </a>
-          )}
-
-          {place.wikipediaUrl && (
-            <a
-              href={place.wikipediaUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                color: 'var(--text-muted)',
-                background: 'var(--bg-tertiary)',
-                padding: '3px 8px',
-                borderRadius: '4px',
-                textDecoration: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}
-            >
-              <Globe size={11} />
-              <span>Wikipedia</span>
-            </a>
-          )}
+        {/* Metrics Row: Safety, Cleanliness, Price */}
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '10px' }}>
+          <span className="badge badge-safety">
+            <Shield size={11} />
+            <span>Safety: {place.safetyScore}/10</span>
+          </span>
+          <span className="badge badge-cleanliness">
+            <Sparkles size={11} />
+            <span>Clean: {place.cleanlinessScore}/10</span>
+          </span>
+          <span style={{
+            fontSize: '11px',
+            fontWeight: 600,
+            background: 'var(--bg-tertiary)',
+            color: 'var(--text-main)',
+            padding: '3px 8px',
+            borderRadius: 'var(--radius-full)'
+          }}>
+            {place.priceLevel} • {place.estimatedCost}
+          </span>
         </div>
+
+        {/* Navigation Estimated Time & Live Traffic Status */}
+        {distanceKm !== undefined && (() => {
+          const dist = distanceKm || 1.5;
+          const driveMins = Math.max(3, Math.round(dist * 2.8 + (dist > 4 ? 4 : 1)));
+          const transitMins = Math.max(5, Math.round(dist * 2.2 + 6));
+          const walkMins = Math.max(8, Math.round(dist * 12.5));
+          const isHeavy = dist > 5;
+          const isModerate = dist > 2.5 && !isHeavy;
+          const trafficStatus = isHeavy ? 'Heavy Delay (+6m)' : isModerate ? 'Moderate (+3m)' : 'Smooth Flow';
+          const trafficColor = isHeavy ? '#dc2626' : isModerate ? '#d97706' : '#16a34a';
+
+          return (
+            <div style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: 'var(--radius-md)',
+              padding: '8px 10px',
+              marginBottom: '12px'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '5px',
+                fontSize: '11px'
+              }}>
+                <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+                  ⏱️ Est. Travel Time:
+                </span>
+                <span style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  color: trafficColor,
+                  background: `${trafficColor}15`,
+                  padding: '2px 6px',
+                  borderRadius: '4px'
+                }}>
+                  🚦 {trafficStatus}
+                </span>
+              </div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: 'var(--text-muted)'
+              }}>
+                <span>🚗 ~{driveMins}m drive</span>
+                <span>🚌 ~{transitMins}m transit</span>
+                <span>🚶 ~{walkMins}m walk</span>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Best Time To Visit */}
+        {place.bestTime && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            fontSize: '11px',
+            color: 'var(--text-muted)',
+            marginBottom: '14px'
+          }}>
+            <Clock size={12} style={{ color: 'var(--accent-warning)', flexShrink: 0 }} />
+            <span>Best: <strong style={{ color: 'var(--text-main)' }}>{place.bestTime}</strong></span>
+          </div>
+        )}
       </div>
 
       {/* Action Footer: Audio Story Lore & Navigate */}
@@ -225,11 +242,10 @@ export function PlaceCard({
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        padding: '12px 16px',
-        background: 'var(--bg-secondary)',
+        paddingTop: '10px',
         borderTop: '1px solid var(--border-subtle)'
       }}>
-        {/* Listen to Real Audio Lore */}
+        {/* Listen to Audio Lore */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -237,7 +253,7 @@ export function PlaceCard({
           }}
           className="btn-secondary"
           style={{ flex: 1, padding: '7px 10px', fontSize: '12px' }}
-          title="Narrate Verified Historical Story via Speech API"
+          title="Listen to Historical & Cultural Story"
         >
           <Volume2 size={14} style={{ color: isPlayingAudio ? 'var(--accent-success)' : 'inherit' }} />
           <span>{isPlayingAudio ? 'Stop Audio' : 'Listen Lore'}</span>
@@ -251,7 +267,7 @@ export function PlaceCard({
           }}
           className="btn-primary"
           style={{ flex: 1, padding: '7px 10px', fontSize: '12px' }}
-          title="Plan Live Road Route with OSRM and Google Maps"
+          title="Plan Safe Multi-Modal Navigation"
         >
           <Navigation size={14} />
           <span>Navigate</span>
