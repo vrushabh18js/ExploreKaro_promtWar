@@ -10,6 +10,8 @@ export function CategoryFilters({
   onToggleBudgetFilter,
   sortBy,
   onChangeSortBy,
+  keywordFilter = '',
+  onChangeKeywordFilter,
   counts
 }) {
   const categories = [
@@ -31,7 +33,7 @@ export function CategoryFilters({
       background: 'var(--bg-secondary)',
       borderBottom: '1px solid var(--border-subtle)'
     }}>
-      {/* Category Pills */}
+      {/* Category Pills & Quick Attributes */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         {categories.map((cat) => {
           const Icon = cat.icon;
@@ -114,31 +116,79 @@ export function CategoryFilters({
         </button>
       </div>
 
-      {/* Sort Select */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <ArrowUpDown size={14} style={{ color: 'var(--text-dim)' }} />
-        <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>Sort by:</span>
-        <select
-          value={sortBy}
-          onChange={(e) => onChangeSortBy(e.target.value)}
-          style={{
+      {/* Right Controls: In-Page Place Search & Sort Select */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+        {/* In-page keyword filter */}
+        {onChangeKeywordFilter && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
             background: 'var(--bg-tertiary)',
-            color: 'var(--text-main)',
             border: '1px solid var(--border-subtle)',
             borderRadius: 'var(--radius-md)',
-            padding: '6px 12px',
-            fontSize: '12px',
-            fontWeight: 600,
-            outline: 'none',
-            cursor: 'pointer'
-          }}
-        >
-          <option value="distance">Nearest Distance</option>
-          <option value="rating">Highest Rating</option>
-          <option value="safety">Safety Score</option>
-          <option value="cleanliness">Cleanliness Score</option>
-          <option value="affordability">Price (Low to High)</option>
-        </select>
+            padding: '4px 8px',
+            width: '210px'
+          }}>
+            <span style={{ fontSize: '13px', marginRight: '6px', opacity: 0.6 }}>🔍</span>
+            <input
+              type="text"
+              placeholder="Filter spots, food, tags..."
+              value={keywordFilter}
+              onChange={(e) => onChangeKeywordFilter(e.target.value)}
+              style={{
+                width: '100%',
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-main)',
+                fontSize: '12px',
+                outline: 'none'
+              }}
+            />
+            {keywordFilter && (
+              <button
+                type="button"
+                onClick={() => onChangeKeywordFilter('')}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: '2px',
+                  fontSize: '11px'
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Sort Select */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <ArrowUpDown size={14} style={{ color: 'var(--text-dim)' }} />
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 500 }}>Sort:</span>
+          <select
+            value={sortBy}
+            onChange={(e) => onChangeSortBy(e.target.value)}
+            style={{
+              background: 'var(--bg-tertiary)',
+              color: 'var(--text-main)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-md)',
+              padding: '6px 10px',
+              fontSize: '12px',
+              fontWeight: 600,
+              outline: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="distance">Nearest Distance</option>
+            <option value="rating">Highest Rating</option>
+            <option value="safety">Safety Score</option>
+            <option value="cleanliness">Cleanliness Score</option>
+            <option value="affordability">Price (Low to High)</option>
+          </select>
+        </div>
       </div>
     </div>
   );

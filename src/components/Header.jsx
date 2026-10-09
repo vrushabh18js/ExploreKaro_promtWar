@@ -28,11 +28,25 @@ export function Header({
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
   const searchTimeoutRef = useRef(null);
+  const searchContainerRef = useRef(null);
 
-  // Debounced geocoding search for ANY location input
+  // Close suggestions when clicking outside
   useEffect(() => {
-    if (!searchQuery || searchQuery.trim().length < 3) {
+    function handleClickOutside(event) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target)) {
+        setSuggestions([]);
+        setIsInputFocused(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Debounced geocoding search for ANY location input (150ms for instant feel)
+  useEffect(() => {
+    if (!searchQuery || searchQuery.trim().length < 2) {
       setSuggestions([]);
       return;
     }
@@ -43,7 +57,7 @@ export function Header({
       const results = await geocodeLocation(searchQuery);
       setSuggestions(results);
       setIsSearching(false);
-    }, 400);
+    }, 150);
 
     return () => {
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
@@ -51,22 +65,92 @@ export function Header({
   }, [searchQuery]);
 
   const handleSelectSuggestion = (item) => {
-    onSelectCity({
-      id: `custom-${Date.now()}`,
-      name: item.name,
-      state: item.fullName.split(',').slice(-2, -1)[0]?.trim() || 'India',
-      tagline: 'Custom Explored Destination',
-      center: [item.lat, item.lng],
-      zoom: 14,
-      isCustom: true,
-      weatherSim: { temp: 28, condition: 'Partly Sunny', rainProb: 10, aqi: 90, aqiLabel: 'Moderate' },
-      trafficStatus: 'Normal Flow',
-      places: [],
-      neighborhoodMatrix: [],
-      safetyHazards: []
+    const cleanName = (item.name || '').toLowerCase().trim();
+    const cleanFull = (item.fullName || '').toLowerCase().trim();
+
+    // Check if the searched location is one of our rich SEED_CITIES
+    const matchedSeed = SEED_CITIES.find(c => {
+      const cName = c.name.toLowerCase();
+      const cId = c.id.toLowerCase();
+      return (
+        cName === cleanName ||
+        cId === cleanName ||
+        cleanName.includes(cName) ||
+        cleanFull.includes(cName) ||
+        (c.id === 'delhi' && (cleanName.includes('delhi') || cleanName.includes('ncr'))) ||
+        (c.id === 'bengaluru' && (cleanName.includes('bangalore') || cleanName.includes('bengaluru')))
+      );
     });
+
+    if (matchedSeed) {
+      onSelectCity(matchedSeed);
+    } else {
+      // Dynamic Custom City
+      onSelectCity({
+        id: `custom-${Date.now()}`,
+        name: item.name,
+        state: item.state || item.fullName?.split(',').slice(-2, -1)[0]?.trim() || 'India',
+        tagline: `Live Explored Destination: ${item.name}`,
+        center: [item.lat, item.lng],
+        zoom: 14,
+        isCustom: true,
+        weatherSim: { temp: 28, condition: 'Partly Sunny', rainProb: 10, aqi: 85, aqiLabel: 'Moderate' },
+        trafficStatus: 'Local Traffic Flow',
+        places: [],
+        neighborhoodMatrix: [],
+        safetyHazards: []
+      });
+    }
+
     setSearchQuery('');
     setSuggestions([]);
+    setIsInputFocused(false);
+  };
+
+  const handleSearchSubmit = async (e) => {
+    if (e) e.preventDefault();
+    const query = searchQuery.trim();
+    if (!query) return;
+
+    setIsSearching(true);
+
+    // 1. Direct check against SEED_CITIES first
+    const directSeedMatch = SEED_CITIES.find(c => 
+      c.name.toLowerCase().includes(query.toLowerCase()) || 
+      query.toLowerCase().includes(c.name.toLowerCase()) ||
+      c.id.toLowerCase() === query.toLowerCase()
+    );
+    if (directSeedMatch) {
+      onSelectCity(directSeedMatch);
+      setSearchQuery('');
+      setSuggestions([]);
+      setIsSearching(false);
+      setIsInputFocused(false);
+      return;
+    }
+
+    // 2. If suggestions already loaded, select the first match
+    if (suggestions.length > 0) {
+      handleSelectSuggestion(suggestions[0]);
+      setIsSearching(false);
+      return;
+    }
+
+    // 3. Otherwise trigger fresh geocode immediately
+    const results = await geocodeLocation(query);
+    setIsSearching(false);
+    if (results && results.length > 0) {
+      handleSelectSuggestion(results[0]);
+    } else {
+      // Synthetic fallback
+      handleSelectSuggestion({
+        name: query.charAt(0).toUpperCase() + query.slice(1),
+        fullName: `${query}, India`,
+        lat: 20.5937,
+        lng: 78.9629,
+        state: 'India'
+      });
+    }
   };
 
   return (
@@ -176,39 +260,86 @@ export function Header({
             </select>
           </div>
 
-          {/* Search Any Location Input */}
-          <div style={{ position: 'relative', flex: 1 }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              background: 'var(--bg-tertiary)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 'var(--radius-md)',
-              padding: '0 12px'
-            }}>
-              <Search size={16} style={{ color: 'var(--text-dim)', marginRight: '8px' }} />
+          {/* Search Any Location Form & Suggestions */}
+          <div ref={searchContainerRef} style={{ position: 'relative', flex: 1 }}>
+            <form
+              onSubmit={handleSearchSubmit}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                background: 'var(--bg-tertiary)',
+                border: isInputFocused ? '1px solid var(--accent-primary)' : '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-md)',
+                padding: '2px 6px 2px 10px',
+                transition: 'border var(--transition-fast)'
+              }}
+            >
+              <Search size={15} style={{ color: isInputFocused ? 'var(--accent-primary)' : 'var(--text-dim)', marginRight: '6px', flexShrink: 0 }} />
               <input
                 type="text"
-                placeholder="Search any town, street, or landmark..."
+                placeholder="Search any city, town, or street (e.g. Pune, Agra)..."
                 value={searchQuery}
+                onFocus={() => setIsInputFocused(true)}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
                   width: '100%',
                   background: 'transparent',
                   border: 'none',
                   color: 'var(--text-main)',
-                  padding: '9px 0',
+                  padding: '7px 0',
                   fontSize: '13px',
                   outline: 'none'
                 }}
               />
-              {isSearching && (
-                <span style={{ fontSize: '11px', color: 'var(--accent-primary)' }}>...</span>
-              )}
-            </div>
 
-            {/* Suggestions Dropdown */}
-            {suggestions.length > 0 && (
+              {/* Clear Query Button */}
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => { setSearchQuery(''); setSuggestions([]); }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    fontSize: '12px'
+                  }}
+                  title="Clear search"
+                >
+                  ✕
+                </button>
+              )}
+
+              {/* Submit Search Button */}
+              <button
+                type="submit"
+                disabled={isSearching}
+                style={{
+                  background: 'var(--accent-primary)',
+                  color: '#000000',
+                  border: 'none',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '5px 10px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: isSearching ? 'wait' : 'pointer',
+                  marginLeft: '4px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  whiteSpace: 'nowrap'
+                }}
+                title="Search location"
+              >
+                {isSearching ? '...' : 'Go'}
+              </button>
+            </form>
+
+            {/* Suggestions & Popular Cities Dropdown */}
+            {(suggestions.length > 0 || (isInputFocused && !searchQuery)) && (
               <div style={{
                 position: 'absolute',
                 top: '110%',
@@ -219,33 +350,90 @@ export function Header({
                 borderRadius: 'var(--radius-md)',
                 boxShadow: 'var(--shadow-lg)',
                 zIndex: 1100,
-                overflow: 'hidden'
+                overflow: 'hidden',
+                maxHeight: '340px',
+                overflowY: 'auto'
               }}>
-                {suggestions.map((item, idx) => (
-                  <div
-                    key={idx}
-                    onClick={() => handleSelectSuggestion(item)}
-                    style={{
-                      padding: '10px 14px',
-                      fontSize: '13px',
-                      cursor: 'pointer',
-                      borderBottom: '1px solid var(--border-subtle)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-card-hover)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <MapPin size={14} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{item.name}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {item.fullName.length > 55 ? item.fullName.slice(0, 55) + '...' : item.fullName}
+                {/* Suggestions List */}
+                {suggestions.length > 0 ? (
+                  suggestions.map((item, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => handleSelectSuggestion(item)}
+                      style={{
+                        padding: '10px 14px',
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid var(--border-subtle)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '8px'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-card-hover)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                        <MapPin size={14} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{item.name}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {item.fullName}
+                          </div>
+                        </div>
                       </div>
+                      <span style={{
+                        fontSize: '10px',
+                        textTransform: 'uppercase',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        background: 'rgba(56, 189, 248, 0.12)',
+                        color: 'var(--accent-primary)',
+                        fontWeight: 700,
+                        flexShrink: 0
+                      }}>
+                        {item.state || 'Spot'}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  /* Popular Quick Picks when empty */
+                  <div style={{ padding: '12px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.05em' }}>
+                      🔥 Popular Destinations:
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {['Pune', 'Goa', 'Delhi', 'Agra', 'Mumbai', 'Jaipur', 'Hyderabad', 'Varanasi', 'Bengaluru', 'Kolkata'].map((popCity) => (
+                        <button
+                          key={popCity}
+                          type="button"
+                          onClick={() => {
+                            const found = SEED_CITIES.find(c => c.name.toLowerCase().includes(popCity.toLowerCase()));
+                            if (found) onSelectCity(found);
+                            setSearchQuery('');
+                            setSuggestions([]);
+                            setIsInputFocused(false);
+                          }}
+                          style={{
+                            background: 'var(--bg-tertiary)',
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-full)',
+                            padding: '4px 10px',
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: 'var(--text-main)',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <span>📍 {popCity}</span>
+                        </button>
+                      ))}
                     </div>
                   </div>
-                ))}
+                )}
               </div>
             )}
           </div>

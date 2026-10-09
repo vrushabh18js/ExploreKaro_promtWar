@@ -38,6 +38,7 @@ export function App() {
   const [budgetFilter, setBudgetFilter] = useState(false);
   const [showWishlistOnly, setShowWishlistOnly] = useState(false);
   const [sortBy, setSortBy] = useState('distance');
+  const [keywordFilter, setKeywordFilter] = useState('');
 
   // Modals state
   const [selectedPlace, setSelectedPlace] = useState(null);
@@ -93,6 +94,7 @@ export function App() {
   useEffect(() => {
     setAnchorCoords(activeCity.center);
     setActiveRoutePolyline(null);
+    setKeywordFilter(''); // Reset search filter on city change
 
     // Fetch live weather from Open-Meteo
     fetchLiveWeather(activeCity.center[0], activeCity.center[1]).then((res) => {
@@ -101,7 +103,12 @@ export function App() {
 
     // If it's a custom location, generate dynamic POIs
     if (activeCity.isCustom) {
-      const generated = generateDynamicPOIs(activeCity.center[0], activeCity.center[1], activeCity.name);
+      const generated = generateDynamicPOIs(
+        activeCity.center[0], 
+        activeCity.center[1], 
+        activeCity.name, 
+        activeCity.state
+      );
       setCustomPlaces(generated);
     } else {
       setCustomPlaces([]);
@@ -120,7 +127,7 @@ export function App() {
     return [...userReports, ...seed];
   }, [activeCity, userReports]);
 
-  // Filter Places by Distance / Radius, Category, Safety, Budget, Wishlist
+  // Filter Places by Distance / Radius, Category, Safety, Budget, Wishlist & Keyword
   const filteredPlaces = useMemo(() => {
     return allCurrentPlaces.filter((place) => {
       // Radius distance check
@@ -139,6 +146,17 @@ export function App() {
       // Wishlist check
       if (showWishlistOnly && !wishlist.includes(place.id)) return false;
 
+      // Keyword filter check (matches title, tags, lore, or cuisine)
+      if (keywordFilter && keywordFilter.trim()) {
+        const kw = keywordFilter.toLowerCase().trim();
+        const matchName = place.name.toLowerCase().includes(kw);
+        const matchDesc = (place.description || '').toLowerCase().includes(kw);
+        const matchLore = (place.historicalLore || '').toLowerCase().includes(kw);
+        const matchTags = (place.tags || []).some(t => t.toLowerCase().includes(kw));
+        const matchCat = (place.category || '').toLowerCase().includes(kw);
+        if (!matchName && !matchDesc && !matchLore && !matchTags && !matchCat) return false;
+      }
+
       return true;
     }).sort((a, b) => {
       const distA = calculateDistanceKm(anchorCoords[0], anchorCoords[1], a.lat, a.lng);
@@ -151,7 +169,7 @@ export function App() {
       if (sortBy === 'affordability') return a.priceLevel.length - b.priceLevel.length;
       return 0;
     });
-  }, [allCurrentPlaces, anchorCoords, radiusKm, activeCategory, safetyFilter, budgetFilter, showWishlistOnly, wishlist, sortBy]);
+  }, [allCurrentPlaces, anchorCoords, radiusKm, activeCategory, safetyFilter, budgetFilter, showWishlistOnly, wishlist, keywordFilter, sortBy]);
 
   // Category counts
   const categoryCounts = useMemo(() => {
@@ -292,6 +310,8 @@ export function App() {
         onToggleBudgetFilter={() => setBudgetFilter(!budgetFilter)}
         sortBy={sortBy}
         onChangeSortBy={setSortBy}
+        keywordFilter={keywordFilter}
+        onChangeKeywordFilter={setKeywordFilter}
         counts={categoryCounts}
       />
 
