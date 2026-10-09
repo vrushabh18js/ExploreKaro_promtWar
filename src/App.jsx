@@ -58,11 +58,27 @@ export function App() {
   // Audio Speech Synthesis state
   const [playingAudioPlaceId, setPlayingAudioPlaceId] = useState(null);
 
-  // Initialize from LocalStorage, Realtime Firebase, and Enforce Light Theme
+  // Initialize from LocalStorage, Realtime Firebase, and Proactively Detect GPS Location
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', 'light');
     setUserReports(getStoredReports());
     setWishlist(getStoredWishlist());
+
+    // Proactively detect user's current GPS location so navigation knows user position first
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          setUserGpsCoords([lat, lng]);
+          console.log('[exploreKaro GPS] Current location detected on app start:', lat, lng);
+        },
+        (err) => {
+          console.log('[exploreKaro GPS] Initial location status:', err.message);
+        },
+        { timeout: 7000, maximumAge: 60000 }
+      );
+    }
 
     // Connect Realtime Firebase Cloud Listener for Live Community Hazard Alerts
     const unsubscribe = listenToLiveCitizenReports((cloudReports) => {
@@ -249,9 +265,31 @@ export function App() {
     }
   };
 
-  // Trigger Navigation to Place
+  // Trigger Navigation to Place (Prioritizes user's current GPS location first)
   const handleNavigateTo = (destPlace) => {
-    const origin = allCurrentPlaces.find(p => p.id !== destPlace.id) || destPlace;
+    // Proactively acquire GPS if not yet available
+    if (!userGpsCoords && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          setUserGpsCoords([lat, lng]);
+          setNavOriginPlace({
+            id: 'current_gps',
+            name: 'My Current Location (GPS Live)',
+            lat,
+            lng
+          });
+        },
+        () => {},
+        { timeout: 5000 }
+      );
+    }
+
+    const origin = userGpsCoords
+      ? { id: 'current_gps', name: 'My Current Location (GPS Live)', lat: userGpsCoords[0], lng: userGpsCoords[1] }
+      : { id: 'current_gps', name: 'My Current Location', lat: anchorCoords[0], lng: anchorCoords[1] };
+
     setNavOriginPlace(origin);
     setNavDestPlace(destPlace);
     setIsNavModalOpen(true);
@@ -269,8 +307,14 @@ export function App() {
         radiusKm={radiusKm}
         onChangeRadius={setRadiusKm}
         onOpenNavigation={() => {
-          setNavOriginPlace(allCurrentPlaces[0] || null);
-          setNavDestPlace(allCurrentPlaces[1] || allCurrentPlaces[0] || null);
+          if (!userGpsCoords && navigator.geolocation) {
+            handleDetectGPS();
+          }
+          const origin = userGpsCoords
+            ? { id: 'current_gps', name: 'My Current Location (GPS Live)', lat: userGpsCoords[0], lng: userGpsCoords[1] }
+            : { id: 'current_gps', name: 'My Current Location', lat: anchorCoords[0], lng: anchorCoords[1] };
+          setNavOriginPlace(origin);
+          setNavDestPlace(allCurrentPlaces[0] || null);
           setIsNavModalOpen(true);
           setIsMapOpen(true);
         }}
@@ -596,6 +640,8 @@ export function App() {
           destinationPlace={navDestPlace}
           allPlaces={allCurrentPlaces}
           hazards={allHazards}
+          userLocation={userGpsCoords}
+          onDetectGPS={handleDetectGPS}
           onClose={() => setIsNavModalOpen(false)}
           onApplyRoute={(route) => setActiveRoutePolyline(route)}
         />

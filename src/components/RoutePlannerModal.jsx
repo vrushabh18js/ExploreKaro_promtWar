@@ -7,18 +7,30 @@ import {
 export function RoutePlannerModal({
   originPlace,
   destinationPlace,
-  allPlaces,
-  hazards,
+  allPlaces = [],
+  hazards = [],
+  userLocation,
+  onDetectGPS,
   onClose,
   onApplyRoute
 }) {
-  const [selectedOrigin, setSelectedOrigin] = useState(originPlace?.id || (allPlaces[0]?.id || ''));
-  const [selectedDest, setSelectedDest] = useState(destinationPlace?.id || (allPlaces[1]?.id || ''));
+  const [selectedOrigin, setSelectedOrigin] = useState(originPlace?.id || 'current_gps');
+  const [selectedDest, setSelectedDest] = useState(destinationPlace?.id || (allPlaces[0]?.id || ''));
   const [transitMode, setTransitMode] = useState('transit'); // 'drive' | 'transit' | 'bike' | 'walk'
   const [routeType, setRouteType] = useState('safeguard'); // 'fastest' | 'safeguard'
 
-  const originObj = allPlaces.find(p => p.id === selectedOrigin) || allPlaces[0];
-  const destObj = allPlaces.find(p => p.id === selectedDest) || allPlaces[1];
+  // Determine Origin object: prioritize Current Location GPS first
+  const originObj = selectedOrigin === 'current_gps'
+    ? {
+        id: 'current_gps',
+        name: userLocation ? 'My Current Location (GPS Live)' : 'My Current Location',
+        lat: userLocation ? userLocation[0] : (originPlace?.lat || allPlaces[0]?.lat || 18.9220),
+        lng: userLocation ? userLocation[1] : (originPlace?.lng || allPlaces[0]?.lng || 72.8347),
+        isCurrentLocation: true
+      }
+    : (allPlaces.find(p => p.id === selectedOrigin) || originPlace || allPlaces[0]);
+
+  const destObj = allPlaces.find(p => p.id === selectedDest) || destinationPlace || allPlaces[1];
 
   // Calculate simulated distances and times
   const calculateSimulatedRoute = () => {
@@ -156,11 +168,18 @@ export function RoutePlannerModal({
             flexDirection: 'column',
             gap: '12px'
           }}>
-            {/* Origin */}
+            {/* Origin Starting Point */}
             <div>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px', display: 'block' }}>
-                Origin Starting Point:
-              </label>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  Origin Starting Point:
+                </label>
+                {userLocation && (
+                  <span style={{ fontSize: '10px', color: '#16a34a', fontWeight: 700 }}>
+                    ✓ GPS Active
+                  </span>
+                )}
+              </div>
               <select
                 value={selectedOrigin}
                 onChange={(e) => setSelectedOrigin(e.target.value)}
@@ -176,12 +195,51 @@ export function RoutePlannerModal({
                   outline: 'none'
                 }}
               >
+                <option value="current_gps">
+                  📍 My Current Location (GPS Live {userLocation ? '✓ Acquired' : '• Auto Detect'})
+                </option>
                 {allPlaces.map((p) => (
                   <option key={p.id} value={p.id}>
-                    📍 {p.name} ({p.category})
+                    🏢 {p.name} ({p.category})
                   </option>
                 ))}
               </select>
+
+              {/* GPS Detection Prompt if not yet acquired */}
+              {selectedOrigin === 'current_gps' && !userLocation && (
+                <div style={{
+                  marginTop: '6px',
+                  background: '#fef3c7',
+                  border: '1px solid #fde68a',
+                  borderRadius: '6px',
+                  padding: '6px 10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: '11px',
+                  color: '#92400e'
+                }}>
+                  <span>📡 Click to detect your exact GPS coordinates:</span>
+                  {onDetectGPS && (
+                    <button
+                      type="button"
+                      onClick={onDetectGPS}
+                      style={{
+                        background: '#d97706',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '3px 8px',
+                        borderRadius: '4px',
+                        fontSize: '10px',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Acquire GPS
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Destination */}
