@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, Sparkles, Send, Compass, CheckCircle2, Shield, ArrowRight } from 'lucide-react';
+import { X, Sparkles, Send, Compass, CheckCircle2, Shield, ArrowRight, Bot } from 'lucide-react';
+import { askGeminiConcierge } from '../services/geminiService';
 
 export function SmartVoiceAssistant({
   allPlaces,
@@ -18,64 +19,62 @@ export function SmartVoiceAssistant({
     'Recommend clean romantic sunset spots near me'
   ];
 
-  const handleRunQuery = (inputPrompt) => {
+  const handleRunQuery = async (inputPrompt) => {
     const text = inputPrompt || query;
     if (!text.trim()) return;
 
     setIsAnalyzing(true);
     setResult(null);
 
-    // Natural Language Processing & Intent Parsing Engine
-    setTimeout(() => {
-      const lower = text.toLowerCase();
-      let matchedPlaces = [...allPlaces];
-      const reasoning = [];
+    // 1. Try Live Gemini LLM API
+    const geminiText = await askGeminiConcierge(text, cityName, allPlaces);
 
-      // Filter by category intent
-      if (lower.includes('food') || lower.includes('eat') || lower.includes('chai') || lower.includes('bakery')) {
-        matchedPlaces = matchedPlaces.filter(p => p.category === 'food');
-        reasoning.push('Prioritized authentic culinary landmarks and verified eateries');
-      } else if (lower.includes('heritage') || lower.includes('history') || lower.includes('monument')) {
-        matchedPlaces = matchedPlaces.filter(p => p.category === 'heritage');
-        reasoning.push('Filtered for UNESCO-recognized and colonial-era heritage architectures');
-      } else if (lower.includes('hidden') || lower.includes('secret') || lower.includes('gem')) {
-        matchedPlaces = matchedPlaces.filter(p => p.category === 'hidden_gem');
-        reasoning.push('Surfaced offbeat cultural spots with lower crowd density');
-      }
+    // 2. Local semantic filter for map places
+    const lower = text.toLowerCase();
+    let matchedPlaces = [...allPlaces];
+    const reasoning = [];
 
-      // Filter by safety constraint
-      if (lower.includes('safe') || lower.includes('night') || lower.includes('solo')) {
-        matchedPlaces = matchedPlaces.filter(p => p.safetyScore >= 8.8);
-        reasoning.push('Enforced high safety threshold (Score ≥ 8.8) with active street surveillance');
-      }
+    if (lower.includes('food') || lower.includes('eat') || lower.includes('chai') || lower.includes('bakery')) {
+      matchedPlaces = matchedPlaces.filter(p => p.category === 'food');
+      reasoning.push('Prioritized authentic culinary landmarks and verified eateries');
+    } else if (lower.includes('heritage') || lower.includes('history') || lower.includes('monument')) {
+      matchedPlaces = matchedPlaces.filter(p => p.category === 'heritage');
+      reasoning.push('Filtered for UNESCO-recognized and colonial-era heritage architectures');
+    } else if (lower.includes('hidden') || lower.includes('secret') || lower.includes('gem')) {
+      matchedPlaces = matchedPlaces.filter(p => p.category === 'hidden_gem');
+      reasoning.push('Surfaced offbeat cultural spots with lower crowd density');
+    }
 
-      // Filter by accessibility
-      if (lower.includes('wheelchair') || lower.includes('accessible')) {
-        matchedPlaces = matchedPlaces.filter(p => p.accessibility?.wheelchair);
-        reasoning.push('Filtered strictly for barrier-free wheelchair accessible paths');
-      }
+    if (lower.includes('safe') || lower.includes('night') || lower.includes('solo')) {
+      matchedPlaces = matchedPlaces.filter(p => p.safetyScore >= 8.8);
+      reasoning.push('Enforced high safety threshold (Score ≥ 8.8) with active street surveillance');
+    }
 
-      // Filter by budget
-      if (lower.includes('budget') || lower.includes('cheap')) {
-        matchedPlaces = matchedPlaces.filter(p => p.priceLevel === '₹' || p.priceLevel === '₹₹');
-        reasoning.push('Filtered for affordable dining and budget exploration options');
-      }
+    if (lower.includes('wheelchair') || lower.includes('accessible')) {
+      matchedPlaces = matchedPlaces.filter(p => p.accessibility?.wheelchair);
+      reasoning.push('Filtered strictly for barrier-free wheelchair accessible paths');
+    }
 
-      // Fallback if filters were too restrictive
-      if (matchedPlaces.length === 0) {
-        matchedPlaces = allPlaces.slice(0, 3);
-        reasoning.push('Balanced top overall recommendations for ' + cityName);
-      }
+    if (lower.includes('budget') || lower.includes('cheap')) {
+      matchedPlaces = matchedPlaces.filter(p => p.priceLevel === '₹' || p.priceLevel === '₹₹');
+      reasoning.push('Filtered for affordable dining and budget exploration options');
+    }
 
-      setResult({
-        query: text,
-        places: matchedPlaces.slice(0, 3),
-        reasoning,
-        summary: `exploreKaro AI analyzed your intent ("${text}") against local infrastructure, security logs, and cultural archives in ${cityName}. Here are the optimal matches ranked for safety, cleanliness, and authentic experience.`
-      });
-      setIsAnalyzing(false);
-    }, 600);
+    if (matchedPlaces.length === 0) {
+      matchedPlaces = allPlaces.slice(0, 3);
+      reasoning.push('Balanced top overall recommendations for ' + cityName);
+    }
+
+    setResult({
+      query: text,
+      places: matchedPlaces.slice(0, 3),
+      reasoning,
+      isGeminiPowered: Boolean(geminiText),
+      summary: geminiText || `exploreKaro AI analyzed your intent ("${text}") against local infrastructure, security logs, and cultural archives in ${cityName}. Here are the optimal matches ranked for safety, cleanliness, and authentic experience.`
+    });
+    setIsAnalyzing(false);
   };
+
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -198,6 +197,24 @@ export function SmartVoiceAssistant({
               flexDirection: 'column',
               gap: '12px'
             }}>
+              {result.isGeminiPowered && (
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(168, 85, 247, 0.2))',
+                  border: '1px solid rgba(56, 189, 248, 0.4)',
+                  padding: '4px 10px',
+                  borderRadius: 'var(--radius-full)',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: 'var(--accent-primary)',
+                  width: 'fit-content'
+                }}>
+                  <Sparkles size={12} />
+                  <span>Powered by Google Gemini 2.5 Flash</span>
+                </div>
+              )}
               <p style={{ fontSize: '13px', color: 'var(--text-main)', lineHeight: 1.5, margin: 0 }}>
                 {result.summary}
               </p>
