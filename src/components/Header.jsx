@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Compass, MapPin, Navigation, AlertTriangle, Scale, 
-  Search, Sliders, Moon, Sun, Bookmark, Sparkles, Crosshair
+  Search, Sliders, Moon, Sun, Bookmark, Sparkles, Crosshair, Loader2
 } from 'lucide-react';
-import { SEED_CITIES } from '../data/citiesData';
-import { geocodeLocation } from '../services/apiService';
+import { searchLocationsOnline } from '../services/apiService';
 
 export function Header({
   activeCity,
-  onSelectCity,
+  onSelectLocation,
   userLocation,
   onDetectGPS,
   radiusKm,
@@ -23,11 +22,13 @@ export function Header({
   theme,
   onToggleTheme,
   isMapOpen,
-  onToggleMap
+  onToggleMap,
+  isLoadingGPS = false
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const searchTimeoutRef = useRef(null);
   const searchContainerRef = useRef(null);
@@ -44,20 +45,31 @@ export function Header({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Debounced geocoding search for ANY location input (150ms for instant feel)
+  // Debounced real-time online geocoding (300ms)
   useEffect(() => {
     if (!searchQuery || searchQuery.trim().length < 2) {
       setSuggestions([]);
+      setSearchError(null);
       return;
     }
 
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     searchTimeoutRef.current = setTimeout(async () => {
       setIsSearching(true);
-      const results = await geocodeLocation(searchQuery);
-      setSuggestions(results);
-      setIsSearching(false);
-    }, 150);
+      setSearchError(null);
+      try {
+        const results = await searchLocationsOnline(searchQuery);
+        setSuggestions(results);
+        if (results.length === 0) {
+          setSearchError('No matching destinations found online. Try another landmark or city.');
+        }
+      } catch (err) {
+        setSearchError(err.message || 'Online geocoding service unavailable.');
+        setSuggestions([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
 
     return () => {
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
@@ -65,45 +77,21 @@ export function Header({
   }, [searchQuery]);
 
   const handleSelectSuggestion = (item) => {
-    const cleanName = (item.name || '').toLowerCase().trim();
-    const cleanFull = (item.fullName || '').toLowerCase().trim();
-
-    // Check if the searched location is one of our rich SEED_CITIES
-    const matchedSeed = SEED_CITIES.find(c => {
-      const cName = c.name.toLowerCase();
-      const cId = c.id.toLowerCase();
-      return (
-        cName === cleanName ||
-        cId === cleanName ||
-        cleanName.includes(cName) ||
-        cleanFull.includes(cName) ||
-        (c.id === 'delhi' && (cleanName.includes('delhi') || cleanName.includes('ncr'))) ||
-        (c.id === 'bengaluru' && (cleanName.includes('bangalore') || cleanName.includes('bengaluru')))
-      );
+    onSelectLocation({
+      id: item.id || `loc-${Date.now()}`,
+      name: item.name,
+      fullName: item.fullName,
+      state: item.state || item.country || '',
+      country: item.country || '',
+      center: [item.lat, item.lng],
+      lat: item.lat,
+      lng: item.lng,
+      type: item.type
     });
-
-    if (matchedSeed) {
-      onSelectCity(matchedSeed);
-    } else {
-      // Dynamic Custom City
-      onSelectCity({
-        id: `custom-${Date.now()}`,
-        name: item.name,
-        state: item.state || item.fullName?.split(',').slice(-2, -1)[0]?.trim() || 'India',
-        tagline: `Live Explored Destination: ${item.name}`,
-        center: [item.lat, item.lng],
-        zoom: 14,
-        isCustom: true,
-        weatherSim: { temp: 28, condition: 'Partly Sunny', rainProb: 10, aqi: 85, aqiLabel: 'Moderate' },
-        trafficStatus: 'Local Traffic Flow',
-        places: [],
-        neighborhoodMatrix: [],
-        safetyHazards: []
-      });
-    }
 
     setSearchQuery('');
     setSuggestions([]);
+    setSearchError(null);
     setIsInputFocused(false);
   };
 
@@ -112,44 +100,26 @@ export function Header({
     const query = searchQuery.trim();
     if (!query) return;
 
-    setIsSearching(true);
-
-    // 1. Direct check against SEED_CITIES first
-    const directSeedMatch = SEED_CITIES.find(c => 
-      c.name.toLowerCase().includes(query.toLowerCase()) || 
-      query.toLowerCase().includes(c.name.toLowerCase()) ||
-      c.id.toLowerCase() === query.toLowerCase()
-    );
-    if (directSeedMatch) {
-      onSelectCity(directSeedMatch);
-      setSearchQuery('');
-      setSuggestions([]);
-      setIsSearching(false);
-      setIsInputFocused(false);
-      return;
-    }
-
-    // 2. If suggestions already loaded, select the first match
+    // If suggestions are currently populated, pick the top result
     if (suggestions.length > 0) {
       handleSelectSuggestion(suggestions[0]);
-      setIsSearching(false);
       return;
     }
 
-    // 3. Otherwise trigger fresh geocode immediately
-    const results = await geocodeLocation(query);
-    setIsSearching(false);
-    if (results && results.length > 0) {
-      handleSelectSuggestion(results[0]);
-    } else {
-      // Synthetic fallback
-      handleSelectSuggestion({
-        name: query.charAt(0).toUpperCase() + query.slice(1),
-        fullName: `${query}, India`,
-        lat: 20.5937,
-        lng: 78.9629,
-        state: 'India'
-      });
+    // Direct online query
+    setIsSearching(true);
+    setSearchError(null);
+    try {
+      const results = await searchLocationsOnline(query);
+      setIsSearching(false);
+      if (results && results.length > 0) {
+        handleSelectSuggestion(results[0]);
+      } else {
+        setSearchError(`No online results found for "${query}". Please check spelling.`);
+      }
+    } catch (err) {
+      setIsSearching(false);
+      setSearchError(err.message || 'Failed to query online places provider.');
     }
   };
 
@@ -211,56 +181,51 @@ export function Header({
                 fontWeight: 700,
                 letterSpacing: '0.05em'
               }}>
-                Urban OS
+                Live Online OS
               </span>
             </div>
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0 }}>
-              Navigate Chaos • Discover Culture • Travel Safe
+              Real-Time Global Exploration • Wikipedia & OSM Live Data
             </p>
           </div>
         </div>
 
-        {/* City Selector & Any-Location Autocomplete Search */}
+        {/* Global Online Location Search Bar */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          flex: '1 1 340px',
-          maxWidth: '520px',
+          flex: '1 1 360px',
+          maxWidth: '560px',
           position: 'relative'
         }}>
-          {/* Seed City Dropdown */}
-          <div style={{ position: 'relative' }}>
-            <select
-              value={activeCity.isCustom ? 'custom' : activeCity.id}
-              onChange={(e) => {
-                const found = SEED_CITIES.find(c => c.id === e.target.value);
-                if (found) onSelectCity(found);
-              }}
-              style={{
-                background: 'var(--bg-tertiary)',
-                color: 'var(--text-main)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-md)',
-                padding: '9px 12px',
-                fontSize: '13px',
-                fontWeight: 600,
-                outline: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              {SEED_CITIES.map((c) => (
-                <option key={c.id} value={c.id}>
-                  📍 {c.name}
-                </option>
-              ))}
-              {activeCity.isCustom && (
-                <option value="custom">📍 {activeCity.name} (Custom)</option>
-              )}
-            </select>
+          {/* Active Location Indicator Badge */}
+          <div 
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-md)',
+              padding: '8px 12px',
+              fontSize: '12px',
+              fontWeight: 700,
+              color: 'var(--text-main)',
+              whiteSpace: 'nowrap',
+              maxWidth: '160px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}
+            title={activeCity?.fullName || activeCity?.name || 'Active Location'}
+          >
+            <MapPin size={14} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {activeCity?.name || 'Worldwide'}
+            </span>
           </div>
 
-          {/* Search Any Location Form & Suggestions */}
+          {/* Real-Time Online Geocoding Input */}
           <div ref={searchContainerRef} style={{ position: 'relative', flex: 1 }}>
             <form
               onSubmit={handleSearchSubmit}
@@ -277,7 +242,7 @@ export function Header({
               <Search size={15} style={{ color: isInputFocused ? 'var(--accent-primary)' : 'var(--text-dim)', marginRight: '6px', flexShrink: 0 }} />
               <input
                 type="text"
-                placeholder="Search any city, town, or street (e.g. Pune, Agra)..."
+                placeholder="Search any city, landmark, or street worldwide..."
                 value={searchQuery}
                 onFocus={() => setIsInputFocused(true)}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -296,7 +261,7 @@ export function Header({
               {searchQuery && (
                 <button
                   type="button"
-                  onClick={() => { setSearchQuery(''); setSuggestions([]); }}
+                  onClick={() => { setSearchQuery(''); setSuggestions([]); setSearchError(null); }}
                   style={{
                     background: 'transparent',
                     border: 'none',
@@ -322,7 +287,7 @@ export function Header({
                   color: '#000000',
                   border: 'none',
                   borderRadius: 'var(--radius-sm)',
-                  padding: '5px 10px',
+                  padding: '5px 12px',
                   fontSize: '12px',
                   fontWeight: 700,
                   cursor: isSearching ? 'wait' : 'pointer',
@@ -332,14 +297,14 @@ export function Header({
                   gap: '4px',
                   whiteSpace: 'nowrap'
                 }}
-                title="Search location"
+                title="Search online destination"
               >
-                {isSearching ? '...' : 'Go'}
+                {isSearching ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : 'Search'}
               </button>
             </form>
 
-            {/* Suggestions & Popular Cities Dropdown */}
-            {(suggestions.length > 0 || (isInputFocused && !searchQuery)) && (
+            {/* Live Suggestions Dropdown */}
+            {(suggestions.length > 0 || searchError || isSearching) && isInputFocused && (
               <div style={{
                 position: 'absolute',
                 top: '110%',
@@ -354,86 +319,59 @@ export function Header({
                 maxHeight: '340px',
                 overflowY: 'auto'
               }}>
-                {/* Suggestions List */}
-                {suggestions.length > 0 ? (
-                  suggestions.map((item, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => handleSelectSuggestion(item)}
-                      style={{
-                        padding: '10px 14px',
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                        borderBottom: '1px solid var(--border-subtle)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '8px'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-card-hover)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                        <MapPin size={14} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{item.name}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {item.fullName}
-                          </div>
-                        </div>
-                      </div>
-                      <span style={{
-                        fontSize: '10px',
-                        textTransform: 'uppercase',
-                        padding: '2px 6px',
-                        borderRadius: '4px',
-                        background: 'rgba(56, 189, 248, 0.12)',
-                        color: 'var(--accent-primary)',
-                        fontWeight: 700,
-                        flexShrink: 0
-                      }}>
-                        {item.state || 'Spot'}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  /* Popular Quick Picks when empty */
-                  <div style={{ padding: '12px' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.05em' }}>
-                      🔥 Popular Destinations:
-                    </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                      {['Pune', 'Goa', 'Delhi', 'Agra', 'Mumbai', 'Jaipur', 'Hyderabad', 'Varanasi', 'Bengaluru', 'Kolkata'].map((popCity) => (
-                        <button
-                          key={popCity}
-                          type="button"
-                          onClick={() => {
-                            const found = SEED_CITIES.find(c => c.name.toLowerCase().includes(popCity.toLowerCase()));
-                            if (found) onSelectCity(found);
-                            setSearchQuery('');
-                            setSuggestions([]);
-                            setIsInputFocused(false);
-                          }}
-                          style={{
-                            background: 'var(--bg-tertiary)',
-                            border: '1px solid var(--border-subtle)',
-                            borderRadius: 'var(--radius-full)',
-                            padding: '4px 10px',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            color: 'var(--text-main)',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <span>📍 {popCity}</span>
-                        </button>
-                      ))}
-                    </div>
+                {isSearching && (
+                  <div style={{ padding: '12px 14px', fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Loader2 size={14} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent-primary)' }} />
+                    <span>Querying live global places directory...</span>
                   </div>
                 )}
+
+                {searchError && !isSearching && (
+                  <div style={{ padding: '12px 14px', fontSize: '12px', color: 'var(--accent-urgent)', background: 'rgba(239, 68, 68, 0.08)' }}>
+                    ⚠️ {searchError}
+                  </div>
+                )}
+
+                {suggestions.map((item, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => handleSelectSuggestion(item)}
+                    style={{
+                      padding: '10px 14px',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid var(--border-subtle)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '8px'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-card-hover)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                      <MapPin size={14} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{item.name}</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.fullName}
+                        </div>
+                      </div>
+                    </div>
+                    <span style={{
+                      fontSize: '10px',
+                      textTransform: 'uppercase',
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      background: 'rgba(56, 189, 248, 0.12)',
+                      color: 'var(--accent-primary)',
+                      fontWeight: 700,
+                      flexShrink: 0
+                    }}>
+                      {item.type || 'Online'}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -441,7 +379,8 @@ export function Header({
           {/* GPS Locate Button */}
           <button
             onClick={onDetectGPS}
-            title="Detect My Real GPS Location"
+            disabled={isLoadingGPS}
+            title="Detect My Real GPS Location (Browser Permission Required)"
             style={{
               background: userLocation ? 'rgba(16, 185, 129, 0.2)' : 'var(--bg-tertiary)',
               color: userLocation ? 'var(--accent-success)' : 'var(--text-main)',
@@ -451,14 +390,18 @@ export function Header({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              cursor: 'pointer'
+              cursor: isLoadingGPS ? 'wait' : 'pointer'
             }}
           >
-            <Crosshair size={16} />
+            {isLoadingGPS ? (
+              <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+            ) : (
+              <Crosshair size={16} />
+            )}
           </button>
         </div>
 
-        {/* Radius Slider (1 - 30 km) */}
+        {/* Radius Slider (1 - 25 km) */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
@@ -475,7 +418,7 @@ export function Header({
           <input
             type="range"
             min="1"
-            max="30"
+            max="25"
             step="1"
             value={radiusKm}
             onChange={(e) => onChangeRadius(parseInt(e.target.value, 10))}
@@ -516,7 +459,7 @@ export function Header({
           <button
             className="btn-primary"
             onClick={onOpenNavigation}
-            title="Open Safe & Multi-Modal Route Planner"
+            title="Open Real OSRM & Google Maps Route Planner"
             style={{ padding: '8px 14px', fontSize: '13px' }}
           >
             <Navigation size={15} />
@@ -527,18 +470,18 @@ export function Header({
           <button
             className="btn-secondary"
             onClick={onOpenComparison}
-            title="Compare Best vs Worst Neighborhoods"
+            title="Compare Live Destination Profiles"
             style={{ padding: '8px 12px', fontSize: '13px' }}
           >
             <Scale size={15} style={{ color: 'var(--accent-warning)' }} />
-            <span>Best vs Worst</span>
+            <span>Compare</span>
           </button>
 
           {/* Report Urban Hazard */}
           <button
             className="btn-urgent"
             onClick={onOpenDispatch}
-            title="Report Accident, Waterlogging or Dark Street"
+            title="Report Realtime Incident to Cloud DB"
             style={{ padding: '8px 12px', fontSize: '13px' }}
           >
             <AlertTriangle size={15} />
@@ -549,7 +492,7 @@ export function Header({
           <button
             className="btn-secondary"
             onClick={onOpenAIModal}
-            title="AI Smart Search & Query"
+            title="AI Exploration Concierge"
             style={{ padding: '8px 12px', fontSize: '13px' }}
           >
             <Sparkles size={15} style={{ color: 'var(--accent-purple)' }} />

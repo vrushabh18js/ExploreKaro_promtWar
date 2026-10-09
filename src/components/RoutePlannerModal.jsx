@@ -1,99 +1,68 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, Car, Train, Bike, Footprints, Shield, Zap, 
-  MapPin, CheckCircle2, AlertTriangle, ArrowRight, Leaf 
+  MapPin, CheckCircle2, ArrowRight, ExternalLink, Loader2 
 } from 'lucide-react';
+import { fetchOnlineRoute } from '../services/apiService';
 
 export function RoutePlannerModal({
   originPlace,
   destinationPlace,
-  allPlaces,
-  hazards,
+  allPlaces = [],
+  userCoords,
   onClose,
   onApplyRoute
 }) {
-  const [selectedOrigin, setSelectedOrigin] = useState(originPlace?.id || (allPlaces[0]?.id || ''));
-  const [selectedDest, setSelectedDest] = useState(destinationPlace?.id || (allPlaces[1]?.id || ''));
-  const [transitMode, setTransitMode] = useState('transit'); // 'drive' | 'transit' | 'bike' | 'walk'
+  const [selectedOriginId, setSelectedOriginId] = useState(originPlace?.id || allPlaces[0]?.id || '');
+  const [selectedDestId, setSelectedDestId] = useState(destinationPlace?.id || allPlaces[1]?.id || allPlaces[0]?.id || '');
+  const [transitMode, setTransitMode] = useState('drive'); // 'drive' | 'transit' | 'bike' | 'walk'
   const [routeType, setRouteType] = useState('safeguard'); // 'fastest' | 'safeguard'
+  const [routeResult, setRouteResult] = useState(null);
+  const [isLoadingRoute, setIsLoadingRoute] = useState(false);
+  const [routeError, setRouteError] = useState(null);
 
-  const originObj = allPlaces.find(p => p.id === selectedOrigin) || allPlaces[0];
-  const destObj = allPlaces.find(p => p.id === selectedDest) || allPlaces[1];
+  // Determine origin and destination objects
+  const originObj = selectedOriginId === 'my-gps' && userCoords
+    ? { id: 'my-gps', name: 'My Current GPS Location', lat: userCoords[0], lng: userCoords[1] }
+    : allPlaces.find(p => p.id === selectedOriginId) || allPlaces[0];
 
-  // Calculate simulated distances and times
-  const calculateSimulatedRoute = () => {
-    if (!originObj || !destObj) return null;
+  const destObj = allPlaces.find(p => p.id === selectedDestId) || allPlaces[1] || allPlaces[0];
 
-    const lat1 = originObj.lat;
-    const lon1 = originObj.lng;
-    const lat2 = destObj.lat;
-    const lon2 = destObj.lng;
+  // Fetch real online road route whenever origin, dest or mode changes
+  useEffect(() => {
+    if (!originObj || !destObj || (originObj.lat === destObj.lat && originObj.lng === destObj.lng)) {
+      setRouteResult(null);
+      return;
+    }
 
-    // Approximate distance in KM
-    const R = 6371;
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLon = ((lon2 - lon1) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    const distKm = Number((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(1)) || 4.2;
+    let isMounted = true;
+    setIsLoadingRoute(true);
+    setRouteError(null);
 
-    const speedMap = { drive: 22, transit: 30, bike: 16, walk: 4.8 };
-    const baseMinutes = Math.round((distKm / speedMap[transitMode]) * 60) + 4;
+    fetchOnlineRoute(originObj.lat, originObj.lng, destObj.lat, destObj.lng, transitMode)
+      .then((res) => {
+        if (!isMounted) return;
+        setRouteResult(res);
+        setIsLoadingRoute(false);
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        setRouteError(err.message || 'Route service currently busy.');
+        setIsLoadingRoute(false);
+      });
 
-    // Fastest route vs SafeGuard route
-    const isSafe = routeType === 'safeguard';
-    const finalMinutes = isSafe ? baseMinutes + 3 : baseMinutes;
-    const finalDist = isSafe ? Number((distKm * 1.08).toFixed(1)) : distKm;
-    const safetyRating = isSafe ? 9.5 : 7.2;
-
-    // Create polyline coordinates
-    // If safeguard, add a detour coordinate avoiding the hazard midpoint
-    const midLat = (lat1 + lat2) / 2;
-    const midLng = (lon1 + lon2) / 2;
-
-    const coordinates = [
-      [lat1, lon1],
-      isSafe
-        ? [midLat + 0.005, midLng - 0.004] // Safe commercial detour
-        : [midLat, midLng], // Direct path through potential congestion
-      [lat2, lon2]
-    ];
-
-    return {
-      distanceKm: finalDist,
-      minutes: finalMinutes,
-      safetyRating,
-      carbonSavedKg: transitMode === 'transit' ? (finalDist * 0.12).toFixed(1) : (transitMode === 'walk' || transitMode === 'bike') ? (finalDist * 0.18).toFixed(1) : '0',
-      coordinates,
-      isSafeGuard: isSafe,
-      turns: isSafe ? [
-        `Start from ${originObj.name} via Main Well-Lit Commercial Boulevard (CCTV Monitored)`,
-        `Bypass reported dark underpass via City Centre Avenue (Police Booth 200m)`,
-        `Proceed straight along Metro Line Corridor`,
-        `Arrive safely at ${destObj.name}`
-      ] : [
-        `Head straight from ${originObj.name} onto Central Express Alley`,
-        `Cross congested intersection (Caution: Slow Traffic & Narrow Pavements)`,
-        `Turn right toward ${destObj.name}`
-      ]
-    };
-  };
-
-  const routeDetails = calculateSimulatedRoute();
+    return () => { isMounted = false; };
+  }, [originObj?.lat, originObj?.lng, destObj?.lat, destObj?.lng, transitMode]);
 
   const handleApply = () => {
-    if (!routeDetails) return;
-    onApplyRoute(routeDetails);
+    if (!routeResult) return;
+    onApplyRoute(routeResult);
     onClose();
   };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div style={{
           padding: '20px',
@@ -104,40 +73,37 @@ export function RoutePlannerModal({
           background: 'var(--bg-tertiary)'
         }}>
           <div>
-            <span style={{
-              fontSize: '11px',
-              fontWeight: 700,
-              textTransform: 'uppercase',
-              color: 'var(--accent-primary)',
-              letterSpacing: '0.04em'
-            }}>
-              Smart Navigation Engine
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                color: 'var(--accent-primary)',
+                letterSpacing: '0.04em'
+              }}>
+                OSRM & Google Maps Engine
+              </span>
+            </div>
             <h2 style={{ fontSize: '20px', fontWeight: 800, margin: '4px 0 0 0', color: 'var(--text-main)' }}>
-              Dual Route & Safety Sentinel
+              Live Multi-Modal Route Navigation
             </h2>
           </div>
           <button
             onClick={onClose}
             style={{
-              background: 'var(--bg-secondary)',
-              color: 'var(--text-main)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '50%',
-              width: '36px',
-              height: '36px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              padding: '6px'
             }}
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
-        {/* Body */}
-        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+        {/* Modal Body */}
+        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Origin & Destination Selectors */}
           <div style={{
             background: 'var(--bg-tertiary)',
@@ -150,27 +116,31 @@ export function RoutePlannerModal({
           }}>
             {/* Origin */}
             <div>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px', display: 'block' }}>
-                Origin Starting Point:
+              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }}></span>
+                Origin (Starting Point):
               </label>
               <select
-                value={selectedOrigin}
-                onChange={(e) => setSelectedOrigin(e.target.value)}
+                value={selectedOriginId}
+                onChange={(e) => setSelectedOriginId(e.target.value)}
                 style={{
                   width: '100%',
                   background: 'var(--bg-secondary)',
                   color: 'var(--text-main)',
                   border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)',
+                  borderRadius: 'var(--radius-sm)',
                   padding: '9px 12px',
                   fontSize: '13px',
-                  fontWeight: 600,
-                  outline: 'none'
+                  outline: 'none',
+                  cursor: 'pointer'
                 }}
               >
+                {userCoords && (
+                  <option value="my-gps">📍 My Current GPS Location</option>
+                )}
                 {allPlaces.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    📍 {p.name} ({p.category})
+                  <option key={`orig-${p.id}`} value={p.id}>
+                    {p.name}
                   </option>
                 ))}
               </select>
@@ -178,37 +148,38 @@ export function RoutePlannerModal({
 
             {/* Destination */}
             <div>
-              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px', display: 'block' }}>
+              <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444' }}></span>
                 Destination:
               </label>
               <select
-                value={selectedDest}
-                onChange={(e) => setSelectedDest(e.target.value)}
+                value={selectedDestId}
+                onChange={(e) => setSelectedDestId(e.target.value)}
                 style={{
                   width: '100%',
                   background: 'var(--bg-secondary)',
                   color: 'var(--text-main)',
                   border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)',
+                  borderRadius: 'var(--radius-sm)',
                   padding: '9px 12px',
                   fontSize: '13px',
-                  fontWeight: 600,
-                  outline: 'none'
+                  outline: 'none',
+                  cursor: 'pointer'
                 }}
               >
                 {allPlaces.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    🎯 {p.name} ({p.category})
+                  <option key={`dest-${p.id}`} value={p.id}>
+                    {p.name}
                   </option>
                 ))}
               </select>
             </div>
           </div>
 
-          {/* Travel Mode Pills */}
+          {/* Transit Modes */}
           <div>
             <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>
-              Select Travel Mode:
+              Mode of Transit:
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
               {[
@@ -222,20 +193,21 @@ export function RoutePlannerModal({
                 return (
                   <button
                     key={m.id}
+                    type="button"
                     onClick={() => setTransitMode(m.id)}
                     style={{
-                      background: isSelected ? 'rgba(56, 189, 248, 0.15)' : 'var(--bg-tertiary)',
-                      color: isSelected ? 'var(--accent-primary)' : 'var(--text-main)',
-                      border: `1px solid ${isSelected ? 'var(--accent-primary)' : 'var(--border-subtle)'}`,
-                      borderRadius: 'var(--radius-md)',
-                      padding: '10px 8px',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
                       gap: '4px',
+                      padding: '10px 6px',
+                      borderRadius: 'var(--radius-md)',
+                      border: `1px solid ${isSelected ? 'var(--accent-primary)' : 'var(--border-subtle)'}`,
+                      background: isSelected ? 'rgba(56, 189, 248, 0.15)' : 'var(--bg-tertiary)',
+                      color: isSelected ? 'var(--accent-primary)' : 'var(--text-muted)',
                       cursor: 'pointer',
-                      fontWeight: 600,
-                      fontSize: '12px'
+                      fontSize: '12px',
+                      fontWeight: 600
                     }}
                   >
                     <Icon size={18} />
@@ -246,118 +218,92 @@ export function RoutePlannerModal({
             </div>
           </div>
 
-          {/* Dual Route Toggle: SafeGuard vs Fastest */}
-          <div>
-            <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>
-              Routing Philosophy:
-            </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              {/* SafeGuard Route */}
-              <div
-                onClick={() => setRouteType('safeguard')}
-                style={{
-                  background: routeType === 'safeguard' ? 'rgba(16, 185, 129, 0.12)' : 'var(--bg-tertiary)',
-                  border: `2px solid ${routeType === 'safeguard' ? '#10b981' : 'var(--border-subtle)'}`,
-                  borderRadius: 'var(--radius-md)',
-                  padding: '12px',
-                  cursor: 'pointer',
-                  transition: 'all var(--transition-fast)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Shield size={16} style={{ color: '#10b981' }} />
-                    <span style={{ fontWeight: 700, fontSize: '13px', color: '#10b981' }}>SafeGuard Route</span>
-                  </div>
-                  <span style={{ fontSize: '11px', background: '#10b981', color: '#000000', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
-                    Recommended
-                  </span>
-                </div>
-                <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4 }}>
-                  Prioritizes CCTV coverage, well-lit active boulevards, and bypasses reported accident & crime zones.
-                </p>
-                <div style={{ marginTop: '8px', fontSize: '12px', fontWeight: 700, color: '#10b981' }}>
-                  Safety Score: 9.5 / 10
-                </div>
-              </div>
-
-              {/* Fastest Route */}
-              <div
-                onClick={() => setRouteType('fastest')}
-                style={{
-                  background: routeType === 'fastest' ? 'rgba(56, 189, 248, 0.12)' : 'var(--bg-tertiary)',
-                  border: `2px solid ${routeType === 'fastest' ? '#38bdf8' : 'var(--border-subtle)'}`,
-                  borderRadius: 'var(--radius-md)',
-                  padding: '12px',
-                  cursor: 'pointer',
-                  transition: 'all var(--transition-fast)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Zap size={16} style={{ color: '#38bdf8' }} />
-                    <span style={{ fontWeight: 700, fontSize: '13px', color: '#38bdf8' }}>Fastest Route</span>
-                  </div>
-                </div>
-                <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4 }}>
-                  Shortest distance via express links, but may include poorly lit shortcuts and peak traffic choke corridors.
-                </p>
-                <div style={{ marginTop: '8px', fontSize: '12px', fontWeight: 700, color: '#f59e0b' }}>
-                  Safety Score: 7.2 / 10
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Route Summary Card */}
-          {routeDetails && (
+          {/* Real Route Calculation Output */}
+          {isLoadingRoute ? (
             <div style={{
               background: 'var(--bg-tertiary)',
-              padding: '14px',
+              padding: '24px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-subtle)',
+              textAlign: 'center',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px'
+            }}>
+              <Loader2 size={18} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent-primary)' }} />
+              <span style={{ fontSize: '13px', color: 'var(--text-main)' }}>Computing live road route with OSRM routing network...</span>
+            </div>
+          ) : routeResult ? (
+            <div style={{
+              background: 'var(--bg-tertiary)',
+              padding: '16px',
               borderRadius: 'var(--radius-md)',
               border: '1px solid var(--border-subtle)'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
                 <div>
-                  <span style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-main)' }}>
-                    {routeDetails.minutes} mins
+                  <span style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-main)' }}>
+                    {routeResult.durationMinutes} mins
                   </span>
-                  <span style={{ fontSize: '13px', color: 'var(--text-muted)', marginLeft: '8px' }}>
-                    ({routeDetails.distanceKm} km)
+                  <span style={{ fontSize: '14px', color: 'var(--text-muted)', marginLeft: '8px' }}>
+                    ({routeResult.distanceKm} km live road network)
                   </span>
                 </div>
-                {Number(routeDetails.carbonSavedKg) > 0 && (
-                  <div style={{
-                    display: 'flex',
+
+                {/* Direct Google Maps Link */}
+                <a
+                  href={routeResult.googleMapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '4px',
-                    fontSize: '11px',
-                    color: '#10b981',
-                    background: 'rgba(16, 185, 129, 0.15)',
-                    padding: '3px 8px',
-                    borderRadius: 'var(--radius-full)',
-                    fontWeight: 600
-                  }}>
-                    <Leaf size={12} />
-                    <span>Saves {routeDetails.carbonSavedKg} kg CO₂</span>
-                  </div>
-                )}
+                    gap: '6px',
+                    padding: '6px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: '#1a73e8',
+                    color: '#ffffff',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    textDecoration: 'none'
+                  }}
+                  title="Open live navigation in Google Maps app"
+                >
+                  <span>Open in Google Maps</span>
+                  <ExternalLink size={13} />
+                </a>
               </div>
 
               {/* Turn-by-Turn Guidance */}
-              <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)', marginBottom: '6px' }}>
-                Navigation Waypoints:
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {routeDetails.turns.map((step, idx) => (
-                  <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
-                    <CheckCircle2 size={13} style={{ color: routeType === 'safeguard' ? '#10b981' : '#38bdf8', marginTop: '2px', flexShrink: 0 }} />
-                    <span>{step}</span>
+              {routeResult.steps && routeResult.steps.length > 0 && (
+                <div>
+                  <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)', marginBottom: '8px' }}>
+                    Live Navigational Maneuvers:
                   </div>
-                ))}
-              </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '140px', overflowY: 'auto' }}>
+                    {routeResult.steps.slice(0, 6).map((step, idx) => (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                        <CheckCircle2 size={13} style={{ color: 'var(--accent-primary)', marginTop: '2px', flexShrink: 0 }} />
+                        <span>{step.instruction} {step.distance ? `(${step.distance}m)` : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          ) : routeError ? (
+            <div style={{
+              background: 'rgba(239, 68, 68, 0.1)',
+              padding: '14px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              fontSize: '12px',
+              color: '#ef4444'
+            }}>
+              ⚠️ {routeError}
+            </div>
+          ) : null}
         </div>
 
         {/* Footer */}
@@ -373,8 +319,12 @@ export function RoutePlannerModal({
           <button className="btn-secondary" onClick={onClose}>
             Cancel
           </button>
-          <button className="btn-primary" onClick={handleApply}>
-            <span>Render Route on Map</span>
+          <button 
+            className="btn-primary" 
+            onClick={handleApply}
+            disabled={!routeResult || isLoadingRoute}
+          >
+            <span>Draw Live Route on Map</span>
             <ArrowRight size={16} />
           </button>
         </div>

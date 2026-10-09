@@ -1,7 +1,6 @@
 import React from 'react';
 import { 
-  X, Volume2, VolumeX, Shield, Sparkles, Clock, 
-  MapPin, Accessibility, Navigation, AlertCircle, Heart 
+  X, Volume2, VolumeX, MapPin, Navigation, Heart, ExternalLink, Globe 
 } from 'lucide-react';
 
 export function PlaceDetailModal({
@@ -17,8 +16,42 @@ export function PlaceDetailModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
+      <div className="modal-content" style={{ maxWidth: '680px' }} onClick={(e) => e.stopPropagation()}>
+        {/* Real Wikimedia Photo Header */}
+        {place.photoUrl && (
+          <div style={{ height: '220px', width: '100%', position: 'relative', overflow: 'hidden', background: '#0f172a' }}>
+            <img
+              src={place.photoUrl}
+              alt={place.name}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: '60px',
+              background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)'
+            }} />
+            <span style={{
+              position: 'absolute',
+              top: '12px',
+              left: '12px',
+              fontSize: '11px',
+              fontWeight: 700,
+              background: 'rgba(0,0,0,0.7)',
+              color: '#38bdf8',
+              padding: '3px 10px',
+              borderRadius: '4px',
+              backdropFilter: 'blur(4px)'
+            }}>
+              📷 Verified Wikimedia Photography
+            </span>
+          </div>
+        )}
+
+        {/* Modal Header */}
         <div style={{
           padding: '20px',
           borderBottom: '1px solid var(--border-subtle)',
@@ -35,9 +68,9 @@ export function PlaceDetailModal({
               color: 'var(--accent-primary)',
               letterSpacing: '0.04em'
             }}>
-              {place.category.replace('_', ' ')} • Verified Dossier
+              {place.category?.toUpperCase() || 'DESTINATION'} • ONLINE VERIFIED
             </span>
-            <h2 style={{ fontSize: '20px', fontWeight: 800, margin: '4px 0 0 0', color: 'var(--text-main)' }}>
+            <h2 style={{ fontSize: '22px', fontWeight: 800, margin: '4px 0 0 0', color: 'var(--text-main)' }}>
               {place.name}
             </h2>
           </div>
@@ -81,74 +114,53 @@ export function PlaceDetailModal({
         </div>
 
         {/* Modal Body */}
-        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Quick Metrics Bar */}
+        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px', maxHeight: '60vh', overflowY: 'auto' }}>
+          {/* Coordinates and Distance */}
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-            gap: '10px'
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            background: 'var(--bg-tertiary)',
+            padding: '10px 14px',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-subtle)',
+            fontSize: '12px'
           }}>
-            <div style={{
-              background: 'var(--bg-tertiary)',
-              padding: '10px 14px',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border-subtle)'
-            }}>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Safety Score</div>
-              <div style={{ fontSize: '16px', fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Shield size={16} /> {place.safetyScore} / 10
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-main)' }}>
+              <MapPin size={14} style={{ color: 'var(--accent-primary)' }} />
+              <span>Real GPS: {place.lat?.toFixed(5)}, {place.lng?.toFixed(5)}</span>
             </div>
-
-            <div style={{
-              background: 'var(--bg-tertiary)',
-              padding: '10px 14px',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border-subtle)'
-            }}>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Cleanliness</div>
-              <div style={{ fontSize: '16px', fontWeight: 700, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Sparkles size={16} /> {place.cleanlinessScore} / 10
-              </div>
-            </div>
-
-            <div style={{
-              background: 'var(--bg-tertiary)',
-              padding: '10px 14px',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border-subtle)'
-            }}>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Affordability</div>
-              <div style={{ fontSize: '14px', fontWeight: 700, color: '#fbbf24' }}>
-                {place.priceLevel} ({place.estimatedCost})
-              </div>
-            </div>
+            {place.distanceKm !== undefined && (
+              <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
+                {place.distanceKm} km from location center
+              </span>
+            )}
           </div>
 
           {/* Historical & Cultural Audio Guide */}
           <div style={{
-            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(168, 85, 247, 0.1))',
-            border: '1px solid rgba(245, 158, 11, 0.3)',
+            background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.1), rgba(168, 85, 247, 0.1))',
+            border: '1px solid rgba(56, 189, 248, 0.25)',
             borderRadius: 'var(--radius-md)',
             padding: '16px'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Volume2 size={18} style={{ color: 'var(--accent-heritage)' }} />
+                <Volume2 size={18} style={{ color: 'var(--accent-primary)' }} />
                 <h4 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>
-                  Interactive AI Cultural Audio Narration
+                  Interactive Web Speech Cultural Guide
                 </h4>
               </div>
               <button
                 onClick={() => onToggleAudio(place)}
                 style={{
-                  background: isPlayingAudio ? '#ef4444' : 'var(--accent-heritage)',
-                  color: '#ffffff',
+                  background: isPlayingAudio ? '#ef4444' : 'var(--accent-primary)',
+                  color: isPlayingAudio ? '#ffffff' : '#000000',
                   border: 'none',
                   borderRadius: 'var(--radius-full)',
                   padding: '6px 14px',
                   fontSize: '12px',
-                  fontWeight: 600,
+                  fontWeight: 700,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -156,102 +168,73 @@ export function PlaceDetailModal({
                 }}
               >
                 {isPlayingAudio ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                <span>{isPlayingAudio ? 'Pause Narration' : 'Play Narration'}</span>
+                <span>{isPlayingAudio ? 'Stop Audio' : 'Play Narration'}</span>
               </button>
             </div>
             <p style={{ fontSize: '13px', color: 'var(--text-main)', lineHeight: 1.6, margin: 0 }}>
-              {place.audioStory || place.historicalLore}
+              {place.audioStory || place.historicalLore || place.description}
             </p>
           </div>
 
-          {/* In-Depth Historical Lore */}
+          {/* In-Depth Historical & Cultural Lore from Real Wikipedia Data */}
           <div>
             <h4 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-main)', marginBottom: '8px' }}>
-              Historical Heritage & Origins
+              Verified Cultural Lore & Background
             </h4>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, margin: 0 }}>
-              {place.historicalLore}
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.65, margin: 0 }}>
+              {place.historicalLore || place.description}
             </p>
           </div>
 
-          {/* Best Time & Visiting Advice */}
-          <div style={{
-            background: 'var(--bg-tertiary)',
-            padding: '14px',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--border-subtle)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-              <Clock size={16} style={{ color: 'var(--accent-warning)' }} />
-              <strong style={{ fontSize: '13px', color: 'var(--text-main)' }}>Optimal Visiting Window</strong>
-            </div>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
-              {place.bestTime}
-            </p>
-          </div>
+          {/* External Verified Reference Links */}
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            {place.googleMapsDirectionsUrl && (
+              <a
+                href={place.googleMapsDirectionsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  background: '#1a73e8',
+                  color: '#ffffff',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  textDecoration: 'none'
+                }}
+              >
+                <span>Open in Google Maps Navigation</span>
+                <ExternalLink size={13} />
+              </a>
+            )}
 
-          {/* Accessibility & Safety Protocol */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-            gap: '12px'
-          }}>
-            {/* Accessibility */}
-            <div style={{
-              background: 'var(--bg-tertiary)',
-              padding: '12px',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border-subtle)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                <Accessibility size={15} style={{ color: '#38bdf8' }} />
-                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)' }}>Accessibility</span>
-              </div>
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0 }}>
-                {place.accessibility?.note || 'Standard pedestrian sidewalks available.'}
-              </p>
-            </div>
-
-            {/* Emergency & Safety */}
-            <div style={{
-              background: 'var(--bg-tertiary)',
-              padding: '12px',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border-subtle)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                <AlertCircle size={15} style={{ color: '#10b981' }} />
-                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)' }}>Safety Infrastructure</span>
-              </div>
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0 }}>
-                {place.emergencyNote || 'Regular local security surveillance active in precinct.'}
-              </p>
-            </div>
-          </div>
-
-          {/* Address & Tags */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
-              <MapPin size={14} style={{ color: 'var(--accent-primary)' }} />
-              <span>{place.address}</span>
-            </div>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              {place.tags?.map((tag, idx) => (
-                <span
-                  key={idx}
-                  style={{
-                    fontSize: '11px',
-                    background: 'var(--bg-tertiary)',
-                    color: 'var(--text-muted)',
-                    padding: '3px 8px',
-                    borderRadius: 'var(--radius-full)',
-                    border: '1px solid var(--border-subtle)'
-                  }}
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
+            {place.wikipediaUrl && (
+              <a
+                href={place.wikipediaUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--bg-tertiary)',
+                  border: '1px solid var(--border-subtle)',
+                  color: 'var(--text-main)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  textDecoration: 'none'
+                }}
+              >
+                <Globe size={14} />
+                <span>Read Full Wikipedia Article</span>
+                <ExternalLink size={12} />
+              </a>
+            )}
           </div>
         </div>
 
@@ -276,7 +259,7 @@ export function PlaceDetailModal({
             }}
           >
             <Navigation size={16} />
-            <span>Launch Safe Route Navigation</span>
+            <span>Plan Route with OSRM & Google Maps</span>
           </button>
         </div>
       </div>
