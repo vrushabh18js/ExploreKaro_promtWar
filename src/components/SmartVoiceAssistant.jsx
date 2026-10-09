@@ -26,8 +26,10 @@ export function SmartVoiceAssistant({
     setIsAnalyzing(true);
     setResult(null);
 
-    // 1. Try Live Gemini LLM API
-    const geminiText = await askGeminiConcierge(text, cityName, allPlaces);
+    // 1. Try Live Gemini LLM API (Cascades across Key Pool -> Groq -> OpenRouter)
+    const aiResult = await askGeminiConcierge(text, cityName, allPlaces);
+    const aiText = aiResult?.text;
+    const providerBadge = aiResult?.providerBadge;
 
     // 2. Local semantic filter for map places
     const lower = text.toLowerCase();
@@ -69,8 +71,9 @@ export function SmartVoiceAssistant({
       query: text,
       places: matchedPlaces.slice(0, 3),
       reasoning,
-      isGeminiPowered: Boolean(geminiText),
-      summary: geminiText || `exploreKaro AI analyzed your intent ("${text}") against local infrastructure, security logs, and cultural archives in ${cityName}. Here are the optimal matches ranked for safety, cleanliness, and authentic experience.`
+      isAiPowered: Boolean(aiText),
+      providerBadge: providerBadge || 'exploreKaro Smart NLP Engine',
+      summary: aiText || `exploreKaro AI analyzed your intent ("${text}") against local infrastructure, security logs, and cultural archives in ${cityName}. Here are the optimal matches ranked for safety, cleanliness, and authentic experience.`
     });
     setIsAnalyzing(false);
   };
@@ -197,24 +200,22 @@ export function SmartVoiceAssistant({
               flexDirection: 'column',
               gap: '12px'
             }}>
-              {result.isGeminiPowered && (
-                <div style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(168, 85, 247, 0.2))',
-                  border: '1px solid rgba(56, 189, 248, 0.4)',
-                  padding: '4px 10px',
-                  borderRadius: 'var(--radius-full)',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  color: 'var(--accent-primary)',
-                  width: 'fit-content'
-                }}>
-                  <Sparkles size={12} />
-                  <span>Powered by Google Gemini 2.5 Flash</span>
-                </div>
-              )}
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(168, 85, 247, 0.2))',
+                border: '1px solid rgba(56, 189, 248, 0.4)',
+                padding: '4px 10px',
+                borderRadius: 'var(--radius-full)',
+                fontSize: '11px',
+                fontWeight: 700,
+                color: 'var(--accent-primary)',
+                width: 'fit-content'
+              }}>
+                <Sparkles size={12} />
+                <span>Powered by {result.providerBadge || 'exploreKaro AI'}</span>
+              </div>
               <p style={{ fontSize: '13px', color: 'var(--text-main)', lineHeight: 1.5, margin: 0 }}>
                 {result.summary}
               </p>
