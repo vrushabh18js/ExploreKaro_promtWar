@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { Eye, ShieldAlert, Navigation2, Layers, Crosshair, ZoomIn, ZoomOut, Maximize2, Activity } from 'lucide-react';
+import { openGoogleMapsNavigation } from '../services/apiService';
 
 export function MapViewer({
   center,
@@ -12,7 +13,8 @@ export function MapViewer({
   onNavigateTo,
   onMapClick,
   activeRoutePolyline,
-  onClose
+  onClose,
+  userLocation
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -287,15 +289,22 @@ export function MapViewer({
           <div style="display: flex; gap: 6px;">
             <button id="btn-popup-view-${place.id}" style="
               flex: 1; background: #0284c7; color: white; border: none;
-              padding: 7px 10px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer;
+              padding: 7px 8px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer;
             ">
-              Story & Lore 🎧
+              Lore 🎧
             </button>
             <button id="btn-popup-nav-${place.id}" style="
-              flex: 1; background: #16a34a; color: white; border: none;
-              padding: 7px 10px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer;
+              flex: 1; background: #475569; color: white; border: none;
+              padding: 7px 8px; border-radius: 8px; font-size: 11px; font-weight: 600; cursor: pointer;
             ">
-              Navigate 🧭
+              Plan 🧭
+            </button>
+            <button id="btn-popup-gmaps-${place.id}" style="
+              flex: 1.4; background: #1a73e8; color: white; border: none;
+              padding: 7px 8px; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer;
+              box-shadow: 0 1px 4px rgba(26,115,232,0.35);
+            ">
+              Google Maps ↗
             </button>
           </div>
         </div>
@@ -309,11 +318,23 @@ export function MapViewer({
       marker.on('popupopen', () => {
         const btnView = document.getElementById(`btn-popup-view-${place.id}`);
         const btnNav = document.getElementById(`btn-popup-nav-${place.id}`);
+        const btnGmaps = document.getElementById(`btn-popup-gmaps-${place.id}`);
         if (btnView) btnView.onclick = () => onSelectPlace(place);
         if (btnNav) btnNav.onclick = () => onNavigateTo(place);
+        if (btnGmaps) {
+          btnGmaps.onclick = () => {
+            openGoogleMapsNavigation({
+              destLat: place.lat,
+              destLng: place.lng,
+              destName: place.name,
+              originLat: userLocation ? userLocation[0] : center[0],
+              originLng: userLocation ? userLocation[1] : center[1]
+            });
+          };
+        }
       });
     });
-  }, [places, center, onSelectPlace, onNavigateTo]);
+  }, [places, center, userLocation, onSelectPlace, onNavigateTo]);
 
   // Render Safety Hazards
   useEffect(() => {

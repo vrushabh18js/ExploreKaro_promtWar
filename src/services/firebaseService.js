@@ -4,6 +4,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAnalytics, isSupported, logEvent } from "firebase/analytics";
 import { getDatabase, ref, push, onValue, set } from "firebase/database";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDi9QReUfXAAY9GywaOkckk_V5gR8CaYiY",
@@ -21,6 +22,10 @@ export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfi
 
 // Initialize Realtime Database
 export const db = getDatabase(app);
+
+// Initialize Firebase Authentication
+export const auth = getAuth(app);
+const googleAuthProvider = new GoogleAuthProvider();
 
 // Initialize Analytics safely
 let analyticsInstance = null;
@@ -89,4 +94,31 @@ export function listenToLiveCitizenReports(callback) {
     console.warn("[exploreKaro Firebase] Failed to attach realtime listener:", err.message);
     return () => {};
   }
+}
+
+// Google Sign-In with Firebase Authentication
+export async function loginWithGoogle() {
+  try {
+    const result = await signInWithPopup(auth, googleAuthProvider);
+    trackAnalyticsEvent("user_google_login_success");
+    return result.user;
+  } catch (error) {
+    console.warn("[exploreKaro Auth] Google Sign-In error:", error.message);
+    throw error;
+  }
+}
+
+// Sign-Out
+export async function logoutUser() {
+  try {
+    await signOut(auth);
+    trackAnalyticsEvent("user_logout");
+  } catch (error) {
+    console.warn("[exploreKaro Auth] Sign-Out error:", error.message);
+  }
+}
+
+// Observer for User Auth Changes
+export function subscribeToAuthChanges(callback) {
+  return onAuthStateChanged(auth, callback);
 }

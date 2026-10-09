@@ -6,6 +6,13 @@
 
 ---
 
+## 🚀 Live Web Deployment
+- **Live URL**: [https://explorekaro.web.app](https://explorekaro.web.app)
+- **Alternate Mirror**: [https://explorekaro.firebaseapp.com](https://explorekaro.firebaseapp.com)
+- **Status**: 🟢 **Live & Deployed on Firebase Hosting**
+
+---
+
 ## 🌟 Overview & Core Value Proposition
 Urban exploration is fraught with fragmented information, unverified safety risks, traffic snarls, and missing cultural depth. **exploreKaro** turns this urban chaos into an intelligent, seamless, and memorable adventure.
 
@@ -21,24 +28,31 @@ Whether searching by **city**, **GPS location**, or **any arbitrary global addre
 
 ## 🛠️ Tech Stack & Architecture
 - **Framework**: React 19 + Vite 8
-- **Mapping & Geodata**: Leaflet.js + CartoDB Voyager / Dark Matter tiles
-- **Geocoding & Reverse Geocoding**: OpenStreetMap (Nominatim API)
-- **Live Weather**: Open-Meteo REST API (zero API key bottleneck)
-- **Speech Synthesis**: Native Web Speech API for zero-latency audio guides
-- **Persistence**: Browser LocalStorage for citizen reports, bookmarks, and custom notes
-- **Styling**: Tailored Modern CSS Design System (CSS tokens, glassmorphism, responsive split-viewport)
+- **Hosting & Deployment**: Firebase Hosting (`explorekaro.web.app`)
+- **Authentication**: Firebase Authentication (Optional Google OAuth Login)
+- **Database & Telemetry**: Firebase Realtime Database for live community hazard dispatches + Firebase Analytics
+- **Live AI & Web Intelligence**: Gemini 2.5 Flash / OpenRouter / Grok APIs for dynamic tourism discovery
+- **Navigation & Directions**: Universal **Google Maps Turn-by-Turn Redirection** with multi-modal transit modes
+- **Mapping & Geodata**: Leaflet.js + OpenStreetMap tile service (zero API key bottleneck)
+- **Geocoding & Reverse Geocoding**: Photon by Komoot + Nominatim OpenStreetMap API
+- **Live Weather**: Open-Meteo REST API for realtime temperatures, condition codes, and rain probabilities
+- **Speech Synthesis**: Native Web Speech API for zero-latency audio lore narration
+- **Persistence**: Browser LocalStorage + Firebase Cloud Realtime sync
+- **Styling**: Tailored Modern CSS Design System (Permanent Light Theme, sleek glassmorphism, responsive split-viewport)
 - **Icons**: Lucide React
 
 ---
 
 ## 🚀 Key Modules
-- **`Header.jsx`**: Universal location search with debounced autocomplete, GPS detector, city selector, and $1 - 30\text{ km}$ dynamic radius slider.
-- **`ChaosBanner.jsx`**: Urban Status Bar showing real-time weather, rain risk, traffic status, and active caution warnings.
-- **`MapViewer.jsx`**: High-performance interactive map with custom colored SVG pins, animated caution hotspots, dynamic radius boundaries, and route polylines.
-- **`RoutePlannerModal.jsx`**: Multi-modal navigation (Drive, Transit, Bike, Walk) featuring a dual-route algorithm: **Fastest Path** vs. **SafeGuard Path** with carbon footprint savings.
+- **`Header.jsx`**: Universal location search with debounced autocomplete, GPS detector, city selector, $1 - 30\text{ km}$ dynamic radius slider, and top-right optional Google Sign-In.
+- **`ChaosBanner.jsx`**: Urban Status Bar showing real-time weather, rain risk, traffic bottlenecks, and active caution warnings.
+- **`MapViewer.jsx`**: Interactive Leaflet map with custom colored pins, animated caution hotspots, dynamic radius boundaries, live route polylines, and direct Google Maps navigation triggers.
+- **`RoutePlannerModal.jsx`**: Multi-modal navigation (Drive, Transit, Bike, Walk) with **SafeGuard Path** vs. **Fastest Path** and 1-click **Launch Google Maps Turn-by-Turn Navigation**.
+- **`PlaceCard.jsx` & `PlaceDetailModal.jsx`**: Curated dossiers featuring audio lore player, distance calculations, safety scores, and instant Google Maps directions.
+- **`AIDataInspectorModal.jsx`**: Realtime telemetry inspector displaying live AI provider statuses, weather parameters, and raw JSON dossiers.
 - **`BestVsWorstModal.jsx`**: Side-by-side radar and comparative bars evaluating neighborhoods with AI verdicts.
-- **`CitizenDispatchModal.jsx`**: Community incident reporting with category tags, severity sliders, simulated voice notes, and photo uploads that update the live map instantly.
-- **`SmartVoiceAssistant.jsx`**: In-app AI Concierge that parses natural language queries and filters destinations.
+- **`CitizenDispatchModal.jsx`**: Community incident reporting with category tags, severity sliders, and live sync to Firebase Realtime Database.
+- **`SmartVoiceAssistant.jsx`**: In-app AI Concierge parsing natural language queries and filtering destinations.
 
 ---
 

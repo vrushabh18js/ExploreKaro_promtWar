@@ -1,5 +1,6 @@
 import React from 'react';
-import { Star, Shield, Sparkles, Volume2, Navigation, Bookmark, Clock, MapPin } from 'lucide-react';
+import { Star, Shield, Sparkles, Volume2, Navigation, Bookmark, Clock, MapPin, ExternalLink } from 'lucide-react';
+import { openGoogleMapsNavigation } from '../services/apiService';
 
 export function PlaceCard({
   place,
@@ -9,7 +10,8 @@ export function PlaceCard({
   onSelectPlace,
   onNavigateTo,
   onPlayAudio,
-  isPlayingAudio
+  isPlayingAudio,
+  userLocation
 }) {
   const categoryLabels = {
     heritage: '🏛️ Heritage & Lore',
@@ -49,18 +51,47 @@ export function PlaceCard({
       {/* Top Meta: Category, Distance & Bookmark */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <span style={{
-            fontSize: '11px',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            color: 'var(--accent-primary)',
-            background: 'rgba(56, 189, 248, 0.1)',
-            padding: '3px 8px',
-            borderRadius: 'var(--radius-full)',
-            letterSpacing: '0.04em'
-          }}>
-            {categoryLabels[place.category] || 'Explore'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            <span style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              color: 'var(--accent-primary)',
+              background: 'rgba(56, 189, 248, 0.1)',
+              padding: '3px 8px',
+              borderRadius: 'var(--radius-full)',
+              letterSpacing: '0.04em'
+            }}>
+              {categoryLabels[place.category] || 'Explore'}
+            </span>
+
+            {place.isLiveAi ? (
+              <span style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                color: '#0284c7',
+                background: '#e0f2fe',
+                padding: '2px 7px',
+                borderRadius: 'var(--radius-full)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px'
+              }}>
+                <Sparkles size={10} /> Live Online AI
+              </span>
+            ) : (
+              <span style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                color: '#475569',
+                background: '#f1f5f9',
+                padding: '2px 7px',
+                borderRadius: 'var(--radius-full)'
+              }}>
+                🏛️ Seed Dossier
+              </span>
+            )}
+          </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {distanceKm !== undefined && (
@@ -237,11 +268,11 @@ export function PlaceCard({
         )}
       </div>
 
-      {/* Action Footer: Audio Story Lore & Navigate */}
+      {/* Action Footer: Audio Story Lore, In-App Route & Google Maps Redirect */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
+        gap: '6px',
         paddingTop: '10px',
         borderTop: '1px solid var(--border-subtle)'
       }}>
@@ -252,25 +283,62 @@ export function PlaceCard({
             onPlayAudio(place);
           }}
           className="btn-secondary"
-          style={{ flex: 1, padding: '7px 10px', fontSize: '12px' }}
+          style={{ padding: '7px 9px', fontSize: '11px', flex: '0 0 auto' }}
           title="Listen to Historical & Cultural Story"
         >
-          <Volume2 size={14} style={{ color: isPlayingAudio ? 'var(--accent-success)' : 'inherit' }} />
-          <span>{isPlayingAudio ? 'Stop Audio' : 'Listen Lore'}</span>
+          <Volume2 size={13} style={{ color: isPlayingAudio ? 'var(--accent-success)' : 'inherit' }} />
+          <span>{isPlayingAudio ? 'Stop' : 'Lore'}</span>
         </button>
 
-        {/* Navigate Here */}
+        {/* In-App Route Planner */}
         <button
           onClick={(e) => {
             e.stopPropagation();
             onNavigateTo(place);
           }}
-          className="btn-primary"
-          style={{ flex: 1, padding: '7px 10px', fontSize: '12px' }}
-          title="Plan Safe Multi-Modal Navigation"
+          className="btn-secondary"
+          style={{ padding: '7px 9px', fontSize: '11px', flex: '0 0 auto' }}
+          title="Open Safe Route Planner on Map"
         >
-          <Navigation size={14} />
-          <span>Navigate</span>
+          <Navigation size={13} />
+          <span>Plan</span>
+        </button>
+
+        {/* Direct Google Maps Turn-by-Turn Navigation */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            openGoogleMapsNavigation({
+              destLat: place.lat,
+              destLng: place.lng,
+              destName: place.name,
+              originLat: userLocation?.[0],
+              originLng: userLocation?.[1]
+            });
+          }}
+          style={{
+            flex: 1,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            background: '#1a73e8',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: 'var(--radius-md)',
+            padding: '7px 10px',
+            fontSize: '11px',
+            fontWeight: 700,
+            cursor: 'pointer',
+            boxShadow: '0 2px 5px rgba(26, 115, 232, 0.3)',
+            transition: 'all 0.15s ease'
+          }}
+          title="Open Turn-by-Turn Live Navigation directly on Google Maps"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+          </svg>
+          <span>Google Maps ↗</span>
         </button>
       </div>
     </div>

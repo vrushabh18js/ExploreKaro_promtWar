@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Compass, MapPin, Navigation, AlertTriangle, Scale, 
-  Search, Sliders, Bookmark, Sparkles, Crosshair
+  Search, Sliders, Bookmark, Sparkles, Crosshair, Database
 } from 'lucide-react';
 import { SEED_CITIES } from '../data/citiesData';
 import { geocodeLocation } from '../services/apiService';
@@ -17,11 +17,15 @@ export function Header({
   onOpenComparison,
   onOpenDispatch,
   onOpenAIModal,
+  onOpenAIDataInspector,
   wishlistCount,
   onToggleWishlistFilter,
   showWishlistOnly,
   isMapOpen,
-  onToggleMap
+  onToggleMap,
+  currentUser,
+  onLoginWithGoogle,
+  onLogout
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -554,6 +558,25 @@ export function Header({
             <span>AI Concierge</span>
           </button>
 
+          {/* AI Data Dossier Inspector */}
+          {onOpenAIDataInspector && (
+            <button
+              className="btn-secondary"
+              onClick={onOpenAIDataInspector}
+              title="Inspect Live AI, Weather and Traffic Data Dossier"
+              style={{
+                padding: '8px 12px',
+                fontSize: '13px',
+                background: 'rgba(2, 132, 199, 0.08)',
+                color: '#0284c7',
+                border: '1px solid rgba(2, 132, 199, 0.25)'
+              }}
+            >
+              <Database size={15} style={{ color: '#0284c7' }} />
+              <span>AI Dossier</span>
+            </button>
+          )}
+
           {/* Wishlist Toggle */}
           <button
             onClick={onToggleWishlistFilter}
@@ -574,6 +597,81 @@ export function Header({
             <Bookmark size={15} />
             <span>{wishlistCount}</span>
           </button>
+
+          {/* Optional Google Login on Far Right Side */}
+          {currentUser ? (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: '#ffffff',
+              border: '1px solid var(--border-subtle)',
+              padding: '3px 10px 3px 4px',
+              borderRadius: 'var(--radius-full)',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+            }}>
+              <img
+                src={currentUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=explorer'}
+                alt={currentUser.displayName || 'Traveler'}
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  border: '1.5px solid #0284c7'
+                }}
+              />
+              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-main)' }}>
+                  {currentUser.displayName?.split(' ')[0] || 'Traveler'}
+                </span>
+                <button
+                  onClick={onLogout}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    color: '#ef4444',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    padding: 0,
+                    textAlign: 'left'
+                  }}
+                  title="Sign out of Google"
+                >
+                  Sign out
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={onLoginWithGoogle}
+              title="Sign in with Google (Optional)"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '7px 13px',
+                borderRadius: 'var(--radius-full)',
+                border: '1px solid #dadce0',
+                background: '#ffffff',
+                color: '#3c4043',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                transition: 'all var(--transition-fast)'
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+              </svg>
+              <span>Sign in</span>
+            </button>
+          )}
         </div>
       </div>
     </header>

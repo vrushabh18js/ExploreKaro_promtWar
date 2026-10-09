@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Header } from './components/Header';
 import { ChaosBanner } from './components/ChaosBanner';
 import { MapViewer } from './components/MapViewer';
@@ -9,11 +9,20 @@ import { RoutePlannerModal } from './components/RoutePlannerModal';
 import { BestVsWorstModal } from './components/BestVsWorstModal';
 import { CitizenDispatchModal } from './components/CitizenDispatchModal';
 import { SmartVoiceAssistant } from './components/SmartVoiceAssistant';
+import { AIDataInspectorModal } from './components/AIDataInspectorModal';
 
 import { SEED_CITIES, calculateDistanceKm } from './data/citiesData';
 import { fetchLiveWeather, generateDynamicPOIs, reverseGeocode } from './services/apiService';
+import { fetchTopTouristPlacesAI } from './services/geminiService';
 import { getStoredReports, saveCitizenReport, getStoredWishlist, toggleWishlistPlace } from './services/storageService';
-import { listenToLiveCitizenReports, pushLiveCitizenReport, trackAnalyticsEvent } from './services/firebaseService';
+import { 
+  listenToLiveCitizenReports, 
+  pushLiveCitizenReport, 
+  trackAnalyticsEvent,
+  loginWithGoogle,
+  logoutUser,
+  subscribeToAuthChanges
+} from './services/firebaseService';
 
 export function App() {
   // Active City & Location Anchor
@@ -28,6 +37,13 @@ export function App() {
   const [customPlaces, setCustomPlaces] = useState([]);
   const [userReports, setUserReports] = useState([]);
   const [userGpsCoords, setUserGpsCoords] = useState(null);
+
+  // AI & Live Web Tourism Discovery State
+  const [isAiDiscovering, setIsAiDiscovering] = useState(false);
+  const [aiDiscoveryInfo, setAiDiscoveryInfo] = useState(null);
+
+  // Optional User Authentication (Google Login via Firebase)
+  const [currentUser, setCurrentUser] = useState(null);
 
   // Filters & Sorting
   const [activeCategory, setActiveCategory] = useState('all');
@@ -45,6 +61,7 @@ export function App() {
   const [isComparisonOpen, setIsComparisonOpen] = useState(false);
   const [isDispatchOpen, setIsDispatchOpen] = useState(false);
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [isAIDataInspectorOpen, setIsAIDataInspectorOpen] = useState(false);
 
   // Active Route drawn on map
   const [activeRoutePolyline, setActiveRoutePolyline] = useState(null);
@@ -96,38 +113,244 @@ export function App() {
     });
 
     trackAnalyticsEvent('app_session_started');
-    return () => unsubscribe && unsubscribe();
+
+    // Subscribe to Google Firebase Auth state
+    const unsubAuth = subscribeToAuthChanges((user) => {
+      setCurrentUser(user);
+    });
+
+    return () => {
+      unsubscribe && unsubscribe();
+      unsubAuth && unsubAuth();
+    };
   }, []);
 
-  // Handle City Change & Weather fetch
+  const handleLoginWithGoogle = async () => {
+    try {
+      await loginWithGoogle();
+    } catch (err) {
+      console.log('[exploreKaro Auth] Login error or popup closed:', err.message);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logoutUser();
+    } catch (err) {
+      console.log('[exploreKaro Auth] Logout error:', err.message);
+    }
+  };
+
+  const lastFetchedCityKeyRef = useRef('');
+
+  // Handle City Change, AI Tourism Discovery, Weather & Traffic
   useEffect(() => {
+    const cityKey = `${activeCity.name}_${activeCity.center[0]}_${activeCity.center[1]}`;
+    if (lastFetchedCityKeyRef.current === cityKey) return;
+    lastFetchedCityKeyRef.current = cityKey;
+
     setAnchorCoords(activeCity.center);
     setActiveRoutePolyline(null);
     setKeywordFilter(''); // Reset search filter on city change
 
-    // Fetch live weather from Open-Meteo
+    // 1. Fetch live weather from Open-Meteo for exact location
     fetchLiveWeather(activeCity.center[0], activeCity.center[1]).then((res) => {
       setWeather(res);
     });
 
-    // If it's a custom location, generate dynamic POIs
-    if (activeCity.isCustom) {
-      const generated = generateDynamicPOIs(
+    // 2. If it's a newly searched custom location without seed data, provide immediate baseline so UI is never blank
+    if (activeCity.isCustom && (!activeCity.places || activeCity.places.length === 0)) {
+      const baseline = generateDynamicPOIs(
         activeCity.center[0], 
         activeCity.center[1], 
         activeCity.name, 
         activeCity.state
       );
-      setCustomPlaces(generated);
-    } else {
-      setCustomPlaces([]);
+      setCustomPlaces(baseline);
     }
+
+    setIsAiDiscovering(true);
+
+    // 3. Always execute Live Online Research via Gemini / OpenRouter AI & Wikipedia
+    fetchTopTouristPlacesAI(
+      activeCity.name,
+      activeCity.state,
+      activeCity.center[0],
+      activeCity.center[1]
+    ).then((aiData) => {
+      if (aiData && aiData.places && aiData.places.length > 0) {
+        setCustomPlaces(aiData.places);
+        setAiDiscoveryInfo({
+          cityName: activeCity.name,
+          count: aiData.places.length,
+          providerBadge: aiData.providerBadge,
+          trafficStatus: aiData.trafficStatus,
+          bottlenecks: aiData.bottlenecks,
+          tagline: aiData.tagline
+        });
+      }
+    }).catch((err) => {
+      console.warn('[exploreKaro] Live AI Discovery handled gracefully:', err);
+    }).finally(() => {
+      setIsAiDiscovering(false);
+    });
   }, [activeCity]);
 
+  // Handler to manually re-run AI discovery on the currently viewed city
+  const handleTriggerAIDiscovery = async () => {
+    setIsAiDiscovering(true);
+    try {
+      const aiData = await fetchTopTouristPlacesAI(
+        activeCity.name,
+        activeCity.state,
+        activeCity.center[0],
+        activeCity.center[1]
+      );
+      if (aiData && aiData.places && aiData.places.length > 0) {
+        setCustomPlaces(aiData.places);
+        setActiveCity((prev) => ({
+          ...prev,
+          trafficStatus: aiData.trafficStatus || prev.trafficStatus,
+          isCustom: true
+        }));
+        setAiDiscoveryInfo({
+          cityName: activeCity.name,
+          count: aiData.places.length,
+          providerBadge: aiData.providerBadge,
+          trafficStatus: aiData.trafficStatus,
+          bottlenecks: aiData.bottlenecks
+        });
+      }
+    } catch (e) {
+      console.warn('[exploreKaro] Manual AI discovery:', e);
+    } finally {
+      setIsAiDiscovering(false);
+    }
+  };
+
+  // Render AI & Live Web Tourism Discovery Banner
+  const renderAiDiscoveryBanner = () => {
+    if (!isAiDiscovering && !aiDiscoveryInfo && !activeCity.isCustom) return null;
+    return (
+      <div style={{
+        background: isAiDiscovering
+          ? 'linear-gradient(135deg, rgba(56, 189, 248, 0.12), rgba(16, 185, 129, 0.12))'
+          : '#ffffff',
+        border: '1px solid',
+        borderColor: isAiDiscovering ? '#38bdf8' : 'var(--border-subtle)',
+        borderRadius: 'var(--radius-lg)',
+        padding: '14px 18px',
+        marginBottom: '16px',
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '12px',
+        boxShadow: 'var(--shadow-sm)',
+        transition: 'all 0.3s ease'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: '38px',
+            height: '38px',
+            borderRadius: '50%',
+            background: isAiDiscovering ? '#e0f2fe' : '#ecfdf5',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '18px',
+            flexShrink: 0
+          }}>
+            {isAiDiscovering ? '✨' : '🏛️'}
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <strong style={{ fontSize: '14px', color: 'var(--text-main)' }}>
+                {isAiDiscovering
+                  ? `Gemini AI & Web Researching Top Places in ${activeCity.name}...`
+                  : `AI & Live Web Intelligence: ${activeCity.name}`}
+              </strong>
+              <span style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                background: isAiDiscovering ? '#dbeafe' : '#e0e7ff',
+                color: isAiDiscovering ? '#1d4ed8' : '#4338ca',
+                padding: '2px 8px',
+                borderRadius: '99px'
+              }}>
+                {aiDiscoveryInfo?.providerBadge || 'Gemini 3.8 / Web Intelligence'}
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '3px 0 0 0' }}>
+              {isAiDiscovering
+                ? `Analyzing verified attractions, food lore, live weather (${weather?.temp}°C), and real-time traffic...`
+                : `Showing verified top attractions, stays & authentic food · 🚦 ${aiDiscoveryInfo?.trafficStatus || activeCity.trafficStatus}`}
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            className="btn-primary"
+            onClick={() => setIsAIDataInspectorOpen(true)}
+            style={{
+              padding: '6px 14px',
+              fontSize: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              borderRadius: 'var(--radius-full)'
+            }}
+            title="Inspect Live AI, Weather and Traffic Data"
+          >
+            <span>📊 View AI Data Dossier</span>
+          </button>
+
+          <button
+            className="btn-secondary"
+            onClick={handleTriggerAIDiscovery}
+            disabled={isAiDiscovering}
+            style={{
+              padding: '6px 14px',
+              fontSize: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              borderRadius: 'var(--radius-full)'
+            }}
+            title="Re-run AI & Web Research for this destination"
+          >
+            <span>{isAiDiscovering ? '⏳ Researching...' : '✨ Re-scan with AI'}</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // Aggregate All Places for Active City / Custom Location
+  // Aggregate All Places: Preserves ALL verified seed data AND seamlessly merges fresh live online AI discoveries!
   const allCurrentPlaces = useMemo(() => {
-    const list = activeCity.isCustom ? customPlaces : (activeCity.places || []);
-    return list;
+    const seedList = (activeCity.places || []).map((p) => ({ ...p, isSeed: true }));
+    const aiList = (customPlaces || []).map((p) => ({ ...p, isLiveAi: true }));
+
+    if (aiList.length === 0) return seedList;
+    if (seedList.length === 0) return aiList;
+
+    // Merge both: prioritize live online AI discovered spots, and keep all unique seed spots
+    const placeMap = new Map();
+    // 1. Add Live Online AI places
+    aiList.forEach((p) => {
+      placeMap.set(p.name.toLowerCase().trim(), p);
+    });
+    // 2. Add Seed places (if not duplicate)
+    seedList.forEach((p) => {
+      const key = p.name.toLowerCase().trim();
+      if (!placeMap.has(key)) {
+        placeMap.set(key, p);
+      }
+    });
+
+    return Array.from(placeMap.values());
   }, [activeCity, customPlaces]);
 
   // Aggregate Hazards (Seed hazards + Stored user reports for this area)
@@ -321,16 +544,24 @@ export function App() {
         onOpenComparison={() => setIsComparisonOpen(true)}
         onOpenDispatch={() => setIsDispatchOpen(true)}
         onOpenAIModal={() => setIsAIModalOpen(true)}
+        onOpenAIDataInspector={() => setIsAIDataInspectorOpen(true)}
         wishlistCount={wishlist.length}
         onToggleWishlistFilter={() => setShowWishlistOnly(!showWishlistOnly)}
         showWishlistOnly={showWishlistOnly}
         isMapOpen={isMapOpen}
         onToggleMap={() => setIsMapOpen(!isMapOpen)}
+        currentUser={currentUser}
+        onLoginWithGoogle={handleLoginWithGoogle}
+        onLogout={handleLogout}
       />
 
       {/* 2. Realtime Urban Chaos Barometer */}
       <ChaosBanner
-        city={activeCity}
+        city={{
+          ...activeCity,
+          trafficStatus: aiDiscoveryInfo?.trafficStatus || activeCity.trafficStatus,
+          tagline: aiDiscoveryInfo?.tagline || activeCity.tagline
+        }}
         weather={weather}
         hazardCount={allHazards.length}
       />
@@ -368,6 +599,7 @@ export function App() {
               onMapClick={(latlng) => {
                 setAnchorCoords([latlng.lat, latlng.lng]);
               }}
+              userLocation={userGpsCoords}
             />
           </section>
 
@@ -381,6 +613,9 @@ export function App() {
             flexDirection: 'column',
             gap: '16px'
           }}>
+            {/* AI Tourism & Live Intelligence Discovery Status */}
+            {renderAiDiscoveryBanner()}
+
             {/* Feed Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
@@ -416,6 +651,7 @@ export function App() {
                       onNavigateTo={handleNavigateTo}
                       onPlayAudio={handleToggleAudio}
                       isPlayingAudio={playingAudioPlaceId === place.id}
+                      userLocation={userGpsCoords}
                     />
                   );
                 })}
@@ -500,6 +736,9 @@ export function App() {
             </button>
           </div>
 
+          {/* AI Tourism & Live Intelligence Discovery Status */}
+          {renderAiDiscoveryBanner()}
+
           {/* Feed Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
             <div>
@@ -551,6 +790,7 @@ export function App() {
                     onNavigateTo={handleNavigateTo}
                     onPlayAudio={handleToggleAudio}
                     isPlayingAudio={playingAudioPlaceId === place.id}
+                    userLocation={userGpsCoords}
                   />
                 );
               })}
@@ -631,6 +871,7 @@ export function App() {
           onToggleAudio={handleToggleAudio}
           isBookmarked={wishlist.includes(selectedPlace.id)}
           onToggleBookmark={handleToggleWishlist}
+          userLocation={userGpsCoords}
         />
       )}
 
@@ -674,6 +915,18 @@ export function App() {
           }}
         />
       )}
+
+      {/* 6. AI Data Dossier & Telemetry Inspector Modal */}
+      <AIDataInspectorModal
+        isOpen={isAIDataInspectorOpen}
+        onClose={() => setIsAIDataInspectorOpen(false)}
+        city={activeCity}
+        weather={weather}
+        places={allCurrentPlaces}
+        aiDiscoveryInfo={aiDiscoveryInfo}
+        onTriggerAIRefresh={handleTriggerAIDiscovery}
+        isAiDiscovering={isAiDiscovering}
+      />
     </div>
   );
 }

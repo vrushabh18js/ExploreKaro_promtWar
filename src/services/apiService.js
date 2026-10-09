@@ -421,3 +421,41 @@ export function generateDynamicPOIs(lat, lng, locationName, stateName = '') {
     emergencyNote: item.emergencyNote
   }));
 }
+
+// Universal Google Maps Live Turn-by-Turn Navigation Redirect
+export function openGoogleMapsNavigation({
+  destLat,
+  destLng,
+  destName = '',
+  originLat,
+  originLng,
+  travelMode = 'driving'
+}) {
+  const modeMap = {
+    driving: 'driving',
+    drive: 'driving',
+    transit: 'transit',
+    bus: 'transit',
+    walk: 'walking',
+    walking: 'walking',
+    bike: 'bicycling',
+    bicycling: 'bicycling'
+  };
+
+  const mode = modeMap[travelMode] || 'driving';
+  let url = 'https://www.google.com/maps/dir/?api=1';
+
+  if (originLat && originLng) {
+    url += `&origin=${originLat},${originLng}`;
+  }
+  if (destLat && destLng) {
+    url += `&destination=${destLat},${destLng}`;
+  } else if (destName) {
+    url += `&destination=${encodeURIComponent(destName)}`;
+  }
+  url += `&travelmode=${mode}&dir_action=navigate`;
+
+  if (typeof window !== 'undefined') {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+}
