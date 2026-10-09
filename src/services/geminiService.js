@@ -190,12 +190,14 @@ async function callOpenRouterFallback(prompt) {
   if (!OPENROUTER_KEY) return null;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
+    const timeout = setTimeout(() => controller.abort(), 7000);
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENROUTER_KEY}`
+        'Authorization': `Bearer ${OPENROUTER_KEY}`,
+        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://explorekaro.local',
+        'X-Title': 'exploreKaro'
       },
       body: JSON.stringify({
         model: 'google/gemini-2.0-flash-exp:free',
@@ -204,13 +206,35 @@ async function callOpenRouterFallback(prompt) {
       signal: controller.signal
     });
     clearTimeout(timeout);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Try meta-llama free model
+      const fallbackRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OPENROUTER_KEY}`,
+          'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://explorekaro.local',
+          'X-Title': 'exploreKaro'
+        },
+        body: JSON.stringify({
+          model: 'meta-llama/llama-3.3-70b-instruct:free',
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      if (!fallbackRes.ok) return null;
+      const data = await fallbackRes.json();
+      return {
+        text: data.choices?.[0]?.message?.content,
+        providerBadge: 'OpenRouter (Llama 3.3 Free)'
+      };
+    }
     const data = await res.json();
     return {
       text: data.choices?.[0]?.message?.content,
-      providerBadge: 'OpenRouter Free Model'
+      providerBadge: 'OpenRouter (Gemini 2.0 Free)'
     };
-  } catch {
+  } catch (err) {
+    console.warn('[exploreKaro AI] OpenRouter fetch failed:', err.message);
     return null;
   }
 }
