@@ -104,6 +104,22 @@ export function ChaosBanner({ city, weather, hazardCount }) {
             <span>{hazardCount} Active Caution Zones</span>
           </div>
 
+          {/* Cloud Realtime Sync Status */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            background: 'rgba(16, 185, 129, 0.12)',
+            color: '#10b981',
+            padding: '4px 10px',
+            borderRadius: 'var(--radius-full)',
+            border: '1px solid rgba(16, 185, 129, 0.25)',
+            fontWeight: 600
+          }}>
+            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', display: 'inline-block', boxShadow: '0 0 8px #10b981' }}></span>
+            <span>Cloud Realtime Live</span>
+          </div>
+
           {/* Optimal Window */}
           <div style={{
             display: 'flex',

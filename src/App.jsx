@@ -13,6 +13,7 @@ import { SmartVoiceAssistant } from './components/SmartVoiceAssistant';
 import { SEED_CITIES, calculateDistanceKm } from './data/citiesData';
 import { fetchLiveWeather, generateDynamicPOIs, reverseGeocode } from './services/apiService';
 import { getStoredReports, saveCitizenReport, getStoredWishlist, toggleWishlistPlace } from './services/storageService';
+import { listenToLiveCitizenReports, pushLiveCitizenReport, trackAnalyticsEvent } from './services/firebaseService';
 
 export function App() {
   // Theme state
@@ -59,10 +60,28 @@ export function App() {
   // Audio Speech Synthesis state
   const [playingAudioPlaceId, setPlayingAudioPlaceId] = useState(null);
 
-  // Initialize from LocalStorage
+  // Initialize from LocalStorage and Realtime Firebase Listener
   useEffect(() => {
     setUserReports(getStoredReports());
     setWishlist(getStoredWishlist());
+
+    // Connect Realtime Firebase Cloud Listener for Live Community Hazard Alerts
+    const unsubscribe = listenToLiveCitizenReports((cloudReports) => {
+      if (cloudReports && cloudReports.length > 0) {
+        setUserReports((prev) => {
+          const map = new Map();
+          cloudReports.forEach((r) => map.set(r.id || r.firebaseId, r));
+          prev.forEach((r) => {
+            const key = r.id || r.firebaseId;
+            if (!map.has(key)) map.set(key, r);
+          });
+          return Array.from(map.values());
+        });
+      }
+    });
+
+    trackAnalyticsEvent('app_session_started');
+    return () => unsubscribe && unsubscribe();
   }, []);
 
   // Update Theme attribute on HTML element
@@ -153,10 +172,11 @@ export function App() {
     setWishlist(updated);
   };
 
-  // Citizen Report Submission Handler
+  // Citizen Report Submission Handler (Syncs to LocalStorage & Firebase Realtime Cloud)
   const handleCitizenReportSubmit = (newReport) => {
-    const updated = saveCitizenReport(newReport);
-    setUserReports(updated);
+    saveCitizenReport(newReport);
+    pushLiveCitizenReport(newReport);
+    setUserReports((prev) => [newReport, ...prev]);
   };
 
   // GPS Location Detection
