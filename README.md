@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 🧭 exploreKaro — Urban Operating System
 
 > **Prompt War × Hack2Skill Submission**  
@@ -76,3 +77,7 @@ npm run build
 - **Technical Depth**: Zero fake mocks. Real geocoding, live weather, real dynamic distance filtering, speech synthesis, and local persistence.
 - **UI/UX Excellence**: High-contrast, responsive, accessible, dark/light theme toggle, and smooth micro-interactions.
 - **Dual Submission Ready**: Structured and clean for both live web deployment and LinkedIn build-in-public documentation.
+=======
+# ExploreKaro_promtWar
+ExploreKaro is an AI-powered travel planning platform designed to help users discover tourist destinations, explore hidden gems, and plan personalized trips. It combines intelligent recommendations, interactive maps, live location, route planning, and travel insights to make exploring easier, smarter, and more convenient.
+>>>>>>> 6f75d14016722a28dbf351f44aeda7ce060df1e8
