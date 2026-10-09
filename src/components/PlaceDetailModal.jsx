@@ -1,0 +1,285 @@
+import React from 'react';
+import { 
+  X, Volume2, VolumeX, Shield, Sparkles, Clock, 
+  MapPin, Accessibility, Navigation, AlertCircle, Heart 
+} from 'lucide-react';
+
+export function PlaceDetailModal({
+  place,
+  onClose,
+  onNavigateTo,
+  isPlayingAudio,
+  onToggleAudio,
+  isBookmarked,
+  onToggleBookmark
+}) {
+  if (!place) return null;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{
+          padding: '20px',
+          borderBottom: '1px solid var(--border-subtle)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: 'var(--bg-tertiary)'
+        }}>
+          <div>
+            <span style={{
+              fontSize: '11px',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              color: 'var(--accent-primary)',
+              letterSpacing: '0.04em'
+            }}>
+              {place.category.replace('_', ' ')} • Verified Dossier
+            </span>
+            <h2 style={{ fontSize: '20px', fontWeight: 800, margin: '4px 0 0 0', color: 'var(--text-main)' }}>
+              {place.name}
+            </h2>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={() => onToggleBookmark(place.id)}
+              style={{
+                background: isBookmarked ? 'rgba(244, 63, 94, 0.2)' : 'var(--bg-secondary)',
+                color: isBookmarked ? 'var(--accent-secondary)' : 'var(--text-main)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: '50%',
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <Heart size={16} fill={isBookmarked ? 'currentColor' : 'none'} />
+            </button>
+            <button
+              onClick={onClose}
+              style={{
+                background: 'var(--bg-secondary)',
+                color: 'var(--text-main)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: '50%',
+                width: '36px',
+                height: '36px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Modal Body */}
+        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Quick Metrics Bar */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+            gap: '10px'
+          }}>
+            <div style={{
+              background: 'var(--bg-tertiary)',
+              padding: '10px 14px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-subtle)'
+            }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Safety Score</div>
+              <div style={{ fontSize: '16px', fontWeight: 700, color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Shield size={16} /> {place.safetyScore} / 10
+              </div>
+            </div>
+
+            <div style={{
+              background: 'var(--bg-tertiary)',
+              padding: '10px 14px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-subtle)'
+            }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Cleanliness</div>
+              <div style={{ fontSize: '16px', fontWeight: 700, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Sparkles size={16} /> {place.cleanlinessScore} / 10
+              </div>
+            </div>
+
+            <div style={{
+              background: 'var(--bg-tertiary)',
+              padding: '10px 14px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-subtle)'
+            }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Affordability</div>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: '#fbbf24' }}>
+                {place.priceLevel} ({place.estimatedCost})
+              </div>
+            </div>
+          </div>
+
+          {/* Historical & Cultural Audio Guide */}
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(168, 85, 247, 0.1))',
+            border: '1px solid rgba(245, 158, 11, 0.3)',
+            borderRadius: 'var(--radius-md)',
+            padding: '16px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Volume2 size={18} style={{ color: 'var(--accent-heritage)' }} />
+                <h4 style={{ fontSize: '14px', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>
+                  Interactive AI Cultural Audio Narration
+                </h4>
+              </div>
+              <button
+                onClick={() => onToggleAudio(place)}
+                style={{
+                  background: isPlayingAudio ? '#ef4444' : 'var(--accent-heritage)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 'var(--radius-full)',
+                  padding: '6px 14px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                {isPlayingAudio ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                <span>{isPlayingAudio ? 'Pause Narration' : 'Play Narration'}</span>
+              </button>
+            </div>
+            <p style={{ fontSize: '13px', color: 'var(--text-main)', lineHeight: 1.6, margin: 0 }}>
+              {place.audioStory || place.historicalLore}
+            </p>
+          </div>
+
+          {/* In-Depth Historical Lore */}
+          <div>
+            <h4 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-main)', marginBottom: '8px' }}>
+              Historical Heritage & Origins
+            </h4>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, margin: 0 }}>
+              {place.historicalLore}
+            </p>
+          </div>
+
+          {/* Best Time & Visiting Advice */}
+          <div style={{
+            background: 'var(--bg-tertiary)',
+            padding: '14px',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-subtle)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+              <Clock size={16} style={{ color: 'var(--accent-warning)' }} />
+              <strong style={{ fontSize: '13px', color: 'var(--text-main)' }}>Optimal Visiting Window</strong>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
+              {place.bestTime}
+            </p>
+          </div>
+
+          {/* Accessibility & Safety Protocol */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gap: '12px'
+          }}>
+            {/* Accessibility */}
+            <div style={{
+              background: 'var(--bg-tertiary)',
+              padding: '12px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-subtle)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                <Accessibility size={15} style={{ color: '#38bdf8' }} />
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)' }}>Accessibility</span>
+              </div>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0 }}>
+                {place.accessibility?.note || 'Standard pedestrian sidewalks available.'}
+              </p>
+            </div>
+
+            {/* Emergency & Safety */}
+            <div style={{
+              background: 'var(--bg-tertiary)',
+              padding: '12px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-subtle)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                <AlertCircle size={15} style={{ color: '#10b981' }} />
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-main)' }}>Safety Infrastructure</span>
+              </div>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0 }}>
+                {place.emergencyNote || 'Regular local security surveillance active in precinct.'}
+              </p>
+            </div>
+          </div>
+
+          {/* Address & Tags */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
+              <MapPin size={14} style={{ color: 'var(--accent-primary)' }} />
+              <span>{place.address}</span>
+            </div>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {place.tags?.map((tag, idx) => (
+                <span
+                  key={idx}
+                  style={{
+                    fontSize: '11px',
+                    background: 'var(--bg-tertiary)',
+                    color: 'var(--text-muted)',
+                    padding: '3px 8px',
+                    borderRadius: 'var(--radius-full)',
+                    border: '1px solid var(--border-subtle)'
+                  }}
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Actions */}
+        <div style={{
+          padding: '16px 20px',
+          borderTop: '1px solid var(--border-subtle)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          gap: '10px',
+          background: 'var(--bg-tertiary)'
+        }}>
+          <button className="btn-secondary" onClick={onClose}>
+            Close
+          </button>
+          <button
+            className="btn-primary"
+            onClick={() => {
+              onClose();
+              onNavigateTo(place);
+            }}
+          >
+            <Navigation size={16} />
+            <span>Launch Safe Route Navigation</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
